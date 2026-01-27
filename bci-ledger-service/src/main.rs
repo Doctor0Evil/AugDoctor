@@ -195,18 +195,21 @@ async fn handle_request(
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let ledger = init_ledger();
+    let civic_profile = init_civic_profile();
+
     let state = AppState {
         ledger: Arc::new(Mutex::new(ledger)),
         rope: Arc::new(Mutex::new(NeuralRope::new())),
+        civic_profile: Arc::new(civic_profile),
     };
-
-    let listener = TcpListener::bind("0.0.0.0:8181").await?;
+loop {
+        let listener = TcpListener::bind("0.0.0.0:8181").await?;
     println!("bci-ledger-service listening on http://0.0.0.0:8181");
-
-    loop {
         let (stream, _) = listener.accept().await?;
         let state_clone = state.clone();
-        tokio::task::spawn(async move {
+}
+
+  tokio::task::spawn(async move {
             let svc = make_service_fn(move |_conn| {
                 let st = state_clone.clone();
                 async move {
