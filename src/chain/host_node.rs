@@ -1,5 +1,5 @@
 //! Biophysical Host Node (AugDoctor, Phoenix-grade test)
-//!
+//
 //! Responsibilities:
 //! - Maintain a sealed, per-host BioTokenState.
 //! - Expose a minimal RPC surface (JSON over TCP) for:
@@ -16,7 +16,7 @@ use std::net::SocketAddr;
 use std::sync::{Arc, RwLock};
 
 use serde::{Deserialize, Serialize};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -30,7 +30,7 @@ use crate::chain::biophysical_runtime::{
     BioTokenState,
     LorentzTimeSource,
     LorentzTimestamp,
-    RuntimeEvent,
+    RuntimeEvent as CoreRuntimeEvent,
     RuntimeEventKind,
     RuntimeResult,
     RuntimeConfig,
@@ -38,7 +38,24 @@ use crate::chain::biophysical_runtime::{
     SystemLorentzClock,
 };
 
-// ------------------ Storage & Node State ------------------------------------
+use crate::security::{AuthEnvelope, CivicClass};
+use crate::civic_profile::CivicRewardProfile;
+use crate::civic_audit::{CivicAuditEntry, append_civic_audit_entry, eco_band_label};
+use augdoctorpolicies::neurohandshakeorchestrator::{
+    HandshakePhase, NeuroHandshakeOrchestrator, NeuroHandshakeState,
+};
+use augdoctorpolicies::shotlevelpolicy::{
+    ShotLevel, ShotLevelDecision, ShotLevelPolicy, ShotLevelPolicyConfig,
+};
+use bioscaleupgradeservice::neuralrope::NeuralRope;
+use biophysical_blockchain::{HostEnvelope, InnerLedger};
+use std::fs::{self, OpenOptions};
+use std::io::{BufRead, BufReader as StdBufReader, Write};
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use uuid::Uuid;
+
+// ------------------ Storage & Node State (inner consensus) ------------------
 
 #[derive(Clone)]
 struct HostStorage {
@@ -183,13 +200,24 @@ struct GossipFrame {
     prev_state_hash: Option<String>,
 }
 
-// ------------------ RPC protocol -------------------------------------------
+// ------------------ Outer JSON-RPC for AI-Chat ------------------------------
+
+#[derive(Debug, Serialize, Deserialize)]
+struct RpcSecurityHeader {
+    pub issuer_did: String,
+    pub subject_role: String,   // "augmented_citizen", "authorized_researcher", "system_daemon"
+    pub network_tier: String,   // "core", "edge", "sandbox"
+    pub biophysical_chain_allowed: bool,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 enum RpcRequest {
-    GetStateSummary {},
+    GetStateSummary {
+        header: RpcSecurityHeader,
+    },
     SubmitEvent {
+        header: RpcSecurityHeader,
         event: RpcEvent,
     },
 }
@@ -236,29 +264,7 @@ struct StateSummary {
     lorentz_ts: (i128, i64),
 }
 
-// Security header for AI-Chat → HostNode calls, mirroring EEG schema headers.
-#[derive(Debug, Serialize, Deserialize)]
-struct RpcSecurityHeader {
-    pub issuer_did: String,
-    pub subject_role: String,   // "augmented_citizen", "authorized_researcher", "system_daemon"
-    pub network_tier: String,   // "core", "edge", "sandbox"
-    pub biophysical_chain_allowed: bool,
-}
-
-// Extended RPC request that carries security metadata.
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-enum RpcRequest {
-    GetStateSummary {
-        header: RpcSecurityHeader,
-    },
-    SubmitEvent {
-        header: RpcSecurityHeader,
-        event: RpcEvent,
-    },
-}
-
-// Hard guard matching your EEG header doctrine.
+// Hard guard matching EEG / ALN header doctrine.
 fn validate_rpc_header(header: &RpcSecurityHeader) -> Result<(), String> {
     const SUPPORTED_TIER_CORE: &str = "core";
     const SUPPORTED_TIER_EDGE: &str = "edge";
@@ -283,7 +289,6 @@ fn validate_rpc_header(header: &RpcSecurityHeader) -> Result<(), String> {
             if header.biophysical_chain_allowed {
                 return Err("sandbox tier cannot set biophysical_chain_allowed=true".to_string());
             }
-            // We also block any mutating SubmitEvent from sandbox below.
         }
         SUPPORTED_TIER_CORE | SUPPORTED_TIER_EDGE => {}
         other => return Err(format!("invalid network_tier {}", other)),
@@ -292,7 +297,583 @@ fn validate_rpc_header(header: &RpcSecurityHeader) -> Result<(), String> {
     Ok(())
 }
 
-// ------------------ Host node structure -------------------------------------
+// ------------------ Disk layout for Phoenix host ----------------------------
+
+#[derive(Clone, Debug)]
+pub struct HostNodePaths {
+    pub base_dir: PathBuf,
+    pub state_file: PathBuf,
+    pub consensus_log: PathBuf,
+    pub civic_audit_log: PathBuf,
+    pub civic_profile_json: PathBuf,
+}
+
+impl HostNodePaths {
+    pub fn new<P: AsRef<Path>>(base: P) -> Self {
+        let base_dir = base.as_ref().to_path_buf();
+        Self {
+            state_file: base_dir.join("state/bio_token_state.json"),
+            consensus_log: base_dir.join("consensus/frames.log"),
+            civic_audit_log: base_dir.join("audit/civic-audit-log.jsonl"),
+            civic_profile_json: base_dir.join("profiles/civic-reward-profile.json"),
+            base_dir,
+        }
+    }
+
+    pub fn ensure_dirs(&self) -> std::io::Result<()> {
+        if let Some(parent) = self.state_file.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        if let Some(parent) = self.consensus_log.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        if let Some(parent) = self.civic_audit_log.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        if let Some(parent) = self.civic_profile_json.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        Ok(())
+    }
+}
+
+// ------------------ Mock ALN / Bostrom directory & consent ------------------
+
+#[derive(Clone, Debug)]
+pub struct DidDirectory {
+    pub identities: HashMap<String, Vec<String>>,
+}
+
+impl DidDirectory {
+    pub fn new() -> Self {
+        let mut identities = HashMap::new();
+        identities.insert(
+            "did:aln:bostrom18sd2ujv24ual9c9pshtxys6j8knh6xaead9ye7".to_string(),
+            vec!["augmented-citizen".to_string()],
+        );
+        Self { identities }
+    }
+
+    pub fn has_role(&self, subject: &str, role: &str) -> bool {
+        self.identities
+            .get(subject)
+            .map(|roles| roles.iter().any(|r| r == role))
+            .unwrap_or(false)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ConsentVerifier {
+    pub require_augmented_citizen: bool,
+}
+
+impl ConsentVerifier {
+    pub fn new() -> Self {
+        Self {
+            require_augmented_citizen: true,
+        }
+    }
+
+    pub fn verify(
+        &self,
+        did_directory: &DidDirectory,
+        auth: &AuthEnvelope,
+    ) -> Result<(), String> {
+        let subject = &auth.subject_id;
+        if self.require_augmented_citizen
+            && !did_directory.has_role(subject, "augmented-citizen")
+        {
+            return Err("missing required role: augmented-citizen".to_string());
+        }
+        if auth.financialization_intent {
+            return Err("financialization_intent not permitted on biophysical host".to_string());
+        }
+        Ok(())
+    }
+}
+
+// ------------------ Minimal inner consensus frame (non-financial) -----------
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ConsensusFrame {
+    pub frame_id: String,
+    pub prev_frame_id: String,
+    pub timestamp_utc: String,
+    pub hostid: String,
+    pub event_hash: String,
+    pub lifeforce_ok: bool,
+    pub eco_cost: f64,
+    pub eco_band: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct HostConsensus {
+    pub hostid: String,
+    pub last_frame_id: String,
+}
+
+impl HostConsensus {
+    pub fn new(hostid: &str) -> Self {
+        Self {
+            hostid: hostid.to_string(),
+            last_frame_id: "0xGENESIS".to_string(),
+        }
+    }
+
+    pub fn build_frame(
+        &mut self,
+        timestamp_utc: &str,
+        event_hash: &str,
+        lifeforce_ok: bool,
+        eco_cost: f64,
+        eco_band: &str,
+    ) -> ConsensusFrame {
+        let frame_id = format!("0xFRM-{}", Uuid::new_v4());
+        let frame = ConsensusFrame {
+            frame_id: frame_id.clone(),
+            prev_frame_id: self.last_frame_id.clone(),
+            timestamp_utc: timestamp_utc.to_string(),
+            hostid: self.hostid.clone(),
+            event_hash: event_hash.to_string(),
+            lifeforce_ok,
+            eco_cost,
+            eco_band: eco_band.to_string(),
+        };
+        self.last_frame_id = frame_id;
+        frame
+    }
+}
+
+// ------------------ Host-local runtime event (AI-Chat → host) ---------------
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct RuntimeEvent {
+    pub auth: AuthEnvelope,
+    pub civic_tags: Vec<String>,
+    pub timestamp_utc: String,
+    pub bci_event: crate::api::BciEvent,
+}
+
+// ------------------ JSON-RPC envelope (AI-Chat side) ------------------------
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct JsonRpcRequest {
+    pub jsonrpc: String,
+    pub method: String,
+    pub id: serde_json::Value,
+    pub params: serde_json::Value,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct JsonRpcResponse {
+    pub jsonrpc: String,
+    pub id: serde_json::Value,
+    pub result: Option<serde_json::Value>,
+    pub error: Option<JsonRpcError>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct JsonRpcError {
+    pub code: i32,
+    pub message: String,
+}
+
+// ------------------ Node-internal shared state ------------------------------
+
+#[derive(Clone)]
+pub struct HostNodeState {
+    pub hostid: String,
+    pub ledger: Arc<Mutex<InnerLedger>>,
+    pub rope: Arc<Mutex<NeuralRope>>,
+    pub civic_profile: Arc<CivicRewardProfile>,
+    pub did_directory: Arc<DidDirectory>,
+    pub consent_verifier: Arc<ConsentVerifier>,
+    pub consensus: Arc<Mutex<HostConsensus>>,
+    pub handshake_state: Arc<Mutex<NeuroHandshakeState>>,
+    pub shot_policy: Arc<ShotLevelPolicy>,
+    pub paths: HostNodePaths,
+}
+
+impl HostNodeState {
+    pub fn load_or_init(
+        hostid: &str,
+        base_dir: impl AsRef<Path>,
+    ) -> std::io::Result<Self> {
+        let paths = HostNodePaths::new(base_dir);
+        paths.ensure_dirs()?;
+
+        // Load or init BioTokenState via InnerLedger.
+        let ledger = if paths.state_file.exists() {
+            let raw = fs::read_to_string(&paths.state_file)?;
+            let state: BioTokenState = serde_json::from_str(&raw)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+            InnerLedger::from_state(state)
+        } else {
+            InnerLedger::new_default(hostid.to_string())
+        };
+
+        // Civic profile from JSON (or default).
+        let civic_profile = CivicRewardProfile::load_from_json(&paths.civic_profile_json)
+            .unwrap_or_else(|_| CivicRewardProfile {
+                multiplier_min: 0.0,
+                multiplier_max: 4.0,
+                default_multiplier: 1.0,
+                required_knowledge_factor: 0.60,
+                heroic_tags: std::collections::HashSet::new(),
+                heroic_multiplier: 3.0,
+                good_tags: std::collections::HashSet::new(),
+                good_multiplier: 1.5,
+                neutral_multiplier: 1.0,
+                disallowed_tags: std::collections::HashSet::new(),
+                eco_bonus_enabled: false,
+                eco_low_threshold: 0.0,
+                eco_low_bonus: 1.0,
+            });
+
+        let did_directory = DidDirectory::new();
+        let consent_verifier = ConsentVerifier::new();
+        let consensus = HostConsensus::new(hostid);
+
+        let handshake_state =
+            NeuroHandshakeOrchestrator::initial("session-host", 3);
+        let shot_policy = ShotLevelPolicy::new(ShotLevelPolicyConfig {
+            maxexamplesfewshot: 4,
+            riskthresholdforfewshot: 0.5,
+            errorratethresholdforfewshot: 0.2,
+            minlatencyforfewshotms: 250,
+            mintokenbudgetforfewshot: 512,
+        });
+
+        Ok(Self {
+            hostid: hostid.to_string(),
+            ledger: Arc::new(Mutex::new(ledger)),
+            rope: Arc::new(Mutex::new(NeuralRope::new())),
+            civic_profile: Arc::new(civic_profile),
+            did_directory: Arc::new(did_directory),
+            consent_verifier: Arc::new(consent_verifier),
+            consensus: Arc::new(Mutex::new(consensus)),
+            handshake_state: Arc::new(Mutex::new(handshake_state)),
+            shot_policy: Arc::new(shot_policy),
+            paths,
+        })
+    }
+
+    pub fn persist_state(&self) -> std::io::Result<()> {
+        let ledger = self.ledger.lock().unwrap();
+        let state: BioTokenState = ledger.to_state();
+        let raw = serde_json::to_string_pretty(&state)?;
+        if let Some(parent) = self.paths.state_file.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(&self.paths.state_file, raw)?;
+        Ok(())
+    }
+
+    pub fn append_consensus_frame(
+        &self,
+        frame: &ConsensusFrame,
+    ) -> std::io::Result<()> {
+        if let Some(parent) = self.paths.consensus_log.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let mut f = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.paths.consensus_log)?;
+        let line = serde_json::to_string(frame)?;
+        writeln!(f, "{line}")?;
+        Ok(())
+    }
+}
+
+// ------------------ Runtime event pipeline (AI-Chat → inner ledger) ---------
+
+async fn handle_runtime_event(
+    state: HostNodeState,
+    event: RuntimeEvent,
+) -> Result<serde_json::Value, JsonRpcError> {
+    // 1. Verify DID / consent (no financialization, augmented‑citizen only).
+    if let Err(e) = state
+        .consent_verifier
+        .verify(&state.did_directory, &event.auth)
+    {
+        return Err(JsonRpcError {
+            code: -32001,
+            message: e,
+        });
+    }
+
+    // 2. Civic classification and knowledge floor.
+    let profile = state.civic_profile.as_ref();
+    let civic_class = profile.classify(&event.civic_tags);
+    if civic_class == CivicClass::Disallowed {
+        return Err(JsonRpcError {
+            code: -32002,
+            message: "disallowed civic class".to_string(),
+        });
+    }
+    if event.auth.knowledge_factor < profile.required_knowledge_factor {
+        return Err(JsonRpcError {
+            code: -32003,
+            message: "knowledge factor below required threshold".to_string(),
+        });
+    }
+
+    // 3. Neuro‑handshake progression (host‑local Phoenix test).
+    let mut handshake_state = state.handshake_state.lock().unwrap().clone();
+    if handshake_state.phase != HandshakePhase::Operation {
+        handshake_state =
+            NeuroHandshakeOrchestrator::apply_event(handshake_state, "userconsented");
+        handshake_state =
+            NeuroHandshakeOrchestrator::apply_event(handshake_state, "calibrationsamplerecorded");
+        *state.handshake_state.lock().unwrap() = handshake_state.clone();
+        if handshake_state.phase != HandshakePhase::Operation {
+            return Err(JsonRpcError {
+                code: -32004,
+                message: format!(
+                    "handshake not in Operation phase: {:?}",
+                    handshake_state.phase
+                ),
+            });
+        }
+    }
+
+    // 4. Eco‑aware multiplier.
+    let eco_cost = event.bci_event.eco_cost_estimate;
+    let multiplier =
+        profile.eco_adjusted_multiplier(civic_class.clone(), eco_cost);
+    let eco_band = eco_band_label(eco_cost);
+
+    // 5. Shot‑level policy (observability only).
+    let shot_signal = augdoctorpolicies::shotlevelpolicy::ShotLevelSignal {
+        taskid: event.bci_event.intent_label.clone(),
+        planelabel: "bci-hci-eeg".to_string(),
+        riskscore: event.bci_event.risk_score,
+        latencybudgetms: event.bci_event.latency_budget_ms,
+        tokenbudget: event.bci_event.token_budget,
+        historicalerrorrate: 0.0,
+        requiresexamples: false,
+    };
+    let shot_decision: ShotLevelDecision =
+        state.shot_policy.decide(shot_signal);
+
+    // 6. Apply event to InnerLedger via BciLedgerOrchestrator.
+    let id_header = event.auth.to_identity_header();
+    let mut ledger = state.ledger.lock().unwrap();
+    let mut rope = state.rope.lock().unwrap();
+    let mut orchestrator =
+        crate::orchestration::BciLedgerOrchestrator::new(&mut ledger, &mut rope);
+
+    let mut adjusted_event = event.bci_event.clone();
+    adjusted_event.eco_cost_estimate =
+        (adjusted_event.eco_cost_estimate * multiplier)
+            .min(ledger.env.eco_flops_limit);
+
+    let handshake_copy = handshake_state.clone();
+    let res = orchestrator.handle_bci_event(
+        &adjusted_event,
+        handshake_copy,
+        &id_header,
+        profile.required_knowledge_factor,
+        &event.timestamp_utc,
+    );
+
+    let (ledger_result, new_handshake, _le, shot_level) = match res {
+        Ok(v) => v,
+        Err(e) => {
+            return Err(JsonRpcError {
+                code: -32005,
+                message: format!("ledger_orchestrator_error:{e}"),
+            });
+        }
+    };
+    *state.handshake_state.lock().unwrap() = new_handshake.clone();
+
+    // 7. Civic audit entry (host-local, non-financial).
+    let lifeforce_ok = ledger_result.applied;
+
+    let r = adjusted_event.risk_score.clamp(0.0, 1.0) as f64;
+    let safety_factor = 1.0 - r * 0.8;
+    let base_brain = 0.002_f64;
+    let base_wave = 0.0015_f64;
+    let base_nano = 0.0005_f64;
+    let base_smart = 0.001_f64;
+
+    let brain_delta_abs = (base_brain * safety_factor * multiplier).abs();
+    let wave_delta_abs = (base_wave * safety_factor * multiplier).abs();
+    let nano_delta_abs = (base_nano * safety_factor * multiplier).abs();
+    let smart_delta_abs = (base_smart * safety_factor * multiplier).abs();
+
+    let audit_entry = CivicAuditEntry {
+        timestamp_utc: event.timestamp_utc.clone(),
+        civic_tags: event.civic_tags.clone(),
+        civic_class: civic_class.clone(),
+        reward_multiplier: multiplier,
+        eco_cost,
+        eco_band: eco_band.clone(),
+        lifeforce_ok,
+        brain_delta_abs,
+        wave_delta_abs,
+        nano_delta_abs,
+        smart_delta_abs,
+        shot_level: shot_level.chosenlevel,
+        handshake_phase: format!("{:?}", new_handshake.phase),
+    };
+
+    let _ = append_civic_audit_entry(
+        &state.paths.civic_audit_log,
+        &audit_entry,
+        16_384,
+    );
+
+    // 8. Consensus frame (append‑only, non‑financial).
+    let event_hash = format!("0xEVT-{}", Uuid::new_v4());
+    let mut consensus = state.consensus.lock().unwrap();
+    let frame = consensus.build_frame(
+        &event.timestamp_utc,
+        &event_hash,
+        lifeforce_ok,
+        eco_cost,
+        &eco_band,
+    );
+    drop(consensus);
+    let _ = state.append_consensus_frame(&frame);
+
+    // 9. Persist inner state.
+    let _ = state.persist_state();
+
+    // 10. Redacted JSON result for AI‑Chat.
+    let result = serde_json::json!({
+        "hostid": state.hostid,
+        "civic_class": format!("{:?}", civic_class),
+        "reward_multiplier": multiplier,
+        "eco_band": eco_band,
+        "lifeforce_ok": lifeforce_ok,
+        "shot_level": match shot_level.chosenlevel {
+            ShotLevel::ZeroShot => "ZeroShot",
+            ShotLevel::FewShot => "FewShot",
+        },
+        "handshake_phase": format!("{:?}", new_handshake.phase),
+        "event_hash": event_hash,
+        "consensus_frame_id": frame.frame_id,
+    });
+
+    Ok(result)
+}
+
+// ------------------ JSON-RPC dispatcher over TCP ----------------------------
+
+async fn handle_jsonrpc(
+    state: HostNodeState,
+    req: JsonRpcRequest,
+) -> JsonRpcResponse {
+    let mut response = JsonRpcResponse {
+        jsonrpc: "2.0".to_string(),
+        id: req.id.clone(),
+        result: None,
+        error: None,
+    };
+
+    match req.method.as_str() {
+        "host.submitRuntimeEvent" => {
+            let parsed: Result<RuntimeEvent, _> =
+                serde_json::from_value(req.params.clone());
+            match parsed {
+                Ok(ev) => match handle_runtime_event(state, ev).await {
+                    Ok(val) => {
+                        response.result = Some(val);
+                    }
+                    Err(err) => {
+                        response.error = Some(err);
+                    }
+                },
+                Err(e) => {
+                    response.error = Some(JsonRpcError {
+                        code: -32602,
+                        message: format!("invalid params: {e}"),
+                    });
+                }
+            }
+        }
+        "host.getHandshakePhase" => {
+            let phase = {
+                let hs = state.handshake_state.lock().unwrap();
+                hs.phase.clone()
+            };
+            response.result = Some(serde_json::json!({
+                "phase": format!("{:?}", phase)
+            }));
+        }
+        "host.getHostInfo" => {
+            response.result = Some(serde_json::json!({
+                "hostid": state.hostid,
+                "tokens": ["BRAIN","WAVE","BLOOD","OXYGEN","NANO"],
+                "financialization": false,
+                "bridge_enabled": false,
+                "staking_enabled": false,
+            }));
+        }
+        _ => {
+            response.error = Some(JsonRpcError {
+                code: -32601,
+                message: "method not found".to_string(),
+            });
+        }
+    }
+
+    response
+}
+
+/// Start a single‑host JSON‑RPC server for AI‑Chat platforms.
+///
+/// Example call:
+///   { "jsonrpc":"2.0", "id":1, "method":"host.submitRuntimeEvent", "params":{...} }
+pub async fn run_host_node(
+    hostid: &str,
+    base_dir: impl AsRef<Path>,
+    bind_addr: &str,
+) -> std::io::Result<JoinHandle<()>> {
+    let state = HostNodeState::load_or_init(hostid, base_dir)?;
+    let listener = TcpListener::bind(bind_addr).await
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::AddrInUse, e))?;
+    let shared = Arc::new(state);
+
+    let handle = tokio::spawn(async move {
+        loop {
+            let (mut socket, _) = match listener.accept().await {
+                Ok(v) => v,
+                Err(_) => continue,
+            };
+            let state = shared.clone();
+            tokio::spawn(async move {
+                let mut buf = Vec::new();
+                if socket.read_to_end(&mut buf).await.is_err() {
+                    return;
+                }
+                let req: Result<JsonRpcRequest, _> =
+                    serde_json::from_slice(&buf);
+                let resp = match req {
+                    Ok(r) => handle_jsonrpc((*state).clone(), r).await,
+                    Err(e) => JsonRpcResponse {
+                        jsonrpc: "2.0".to_string(),
+                        id: serde_json::Value::Null,
+                        result: None,
+                        error: Some(JsonRpcError {
+                            code: -32700,
+                            message: format!("parse error: {e}"),
+                        }),
+                    },
+                };
+                let raw = serde_json::to_vec(&resp).unwrap_or_else(|_| b"{}".to_vec());
+                let _ = socket.write_all(&raw).await;
+            });
+        }
+    });
+
+    Ok(handle)
+}
+
+// ------------------ Inner HostNode (Lorentz + BiophysicalRuntime) -----------
 
 pub struct HostNode<D, C, HC>
 where
@@ -342,7 +923,7 @@ where
         }
     }
 
-    fn convert_rpc_event(&self, rpc: RpcEvent) -> RuntimeEvent {
+    fn convert_rpc_event(&self, rpc: RpcEvent) -> CoreRuntimeEvent {
         let initiator = aln_did::ALNDID {
             id: rpc.initiator_did,
             shard: rpc.initiator_shard,
@@ -355,22 +936,18 @@ where
         });
 
         let kind = match rpc.event_kind {
-            RpcEventKind::EvolutionUpgrade { evolution_id } => RuntimeEventKind::EvolutionUpgrade {
-                evolution_id,
-            },
+            RpcEventKind::EvolutionUpgrade { evolution_id } => {
+                RuntimeEventKind::EvolutionUpgrade { evolution_id }
+            }
             RpcEventKind::WaveLoad { task_id, requested_wave } => {
                 RuntimeEventKind::WaveLoad { task_id, requested_wave }
             }
-            RpcEventKind::SmartAutonomy {
-                agent_id,
-                requested_smart,
-            } => RuntimeEventKind::SmartAutonomy {
-                agent_id,
-                requested_smart,
-            },
+            RpcEventKind::SmartAutonomy { agent_id, requested_smart } => {
+                RuntimeEventKind::SmartAutonomy { agent_id, requested_smart }
+            }
         };
 
-        RuntimeEvent {
+        CoreRuntimeEvent {
             kind,
             initiator,
             consent,
@@ -378,78 +955,77 @@ where
         }
     }
 
-   async fn handle_rpc(&self, req: RpcRequest) -> RpcResponse {
-    match req {
-        RpcRequest::GetStateSummary { header } => {
-            if let Err(e) = validate_rpc_header(&header) {
-                return RpcResponse::Error { error: e };
-            }
-            let s = self.storage.read_state();
-            RpcResponse::OkStateSummary {
-                summary: StateSummary {
-                    brain: s.brain,
-                    wave: s.wave,
-                    blood: s.blood,
-                    oxygen: s.oxygen,
-                    nano: s.nano,
-                    smart: s.smart,
-                    lorentz_ts: (s.lorentz_ts.0, s.lorentz_ts.1),
-                },
-            }
-        }
-        RpcRequest::SubmitEvent { header, event } => {
-            if let Err(e) = validate_rpc_header(&header) {
-                return RpcResponse::Error { error: e };
-            }
-            // Explicitly refuse sandbox network tier for mutating calls.
-            if header.network_tier == "sandbox" {
-                return RpcResponse::Error {
-                    error: "sandbox tier cannot submit mutating events".to_string(),
-                };
-            }
-
-            let mut state = self.storage.read_state();
-            let host_frame = self.build_host_frame();
-            state.lorentz_ts = host_frame.lorentz_ts;
-
-            let runtime_event = self.convert_rpc_event(event);
-            let previous = self.storage.read_last_frame();
-            let previous_ref = previous.as_ref();
-
-            let result: RuntimeResult<biospectre_consensus::ConsensusFrame> =
-                self.runtime
-                    .execute_event(&mut state, previous_ref, &host_frame, &runtime_event);
-
-            match result {
-                Ok(frame) => {
-                    let state_hash_str = hex::encode(frame.state_hash.0);
-                    let prev_state_hash_str =
-                        frame.prev_state_hash.as_ref().map(|h| hex::encode(h.0));
-                    self.storage.apply_state_and_frame(state.clone(), frame.clone());
-
-                    let _ = self
-                        .gossip_tx
-                        .send(GossipFrame {
-                            host_id: self.host_id.id.clone(),
-                            shard: self.host_id.shard.clone(),
-                            seq_no: frame.seq_no,
-                            state_hash: state_hash_str.clone(),
-                            prev_state_hash: prev_state_hash_str,
-                        })
-                        .await;
-
-                    RpcResponse::OkEventApplied {
-                        seq_no: frame.seq_no,
-                        state_hash: state_hash_str,
-                    }
+    async fn handle_rpc(&self, req: RpcRequest) -> RpcResponse {
+        match req {
+            RpcRequest::GetStateSummary { header } => {
+                if let Err(e) = validate_rpc_header(&header) {
+                    return RpcResponse::Error { error: e };
                 }
-                Err(e) => RpcResponse::Error {
-                    error: format!("{:?}", e),
-                },
+                let s = self.storage.read_state();
+                RpcResponse::OkStateSummary {
+                    summary: StateSummary {
+                        brain: s.brain,
+                        wave: s.wave,
+                        blood: s.blood,
+                        oxygen: s.oxygen,
+                        nano: s.nano,
+                        smart: s.smart,
+                        lorentz_ts: (s.lorentz_ts.0, s.lorentz_ts.1),
+                    },
+                }
+            }
+            RpcRequest::SubmitEvent { header, event } => {
+                if let Err(e) = validate_rpc_header(&header) {
+                    return RpcResponse::Error { error: e };
+                }
+                if header.network_tier == "sandbox" {
+                    return RpcResponse::Error {
+                        error: "sandbox tier cannot submit mutating events".to_string(),
+                    };
+                }
+
+                let mut state = self.storage.read_state();
+                let host_frame = self.build_host_frame();
+                state.lorentz_ts = host_frame.lorentz_ts;
+
+                let runtime_event = self.convert_rpc_event(event);
+                let previous = self.storage.read_last_frame();
+                let previous_ref = previous.as_ref();
+
+                let result: RuntimeResult<biospectre_consensus::ConsensusFrame> =
+                    self.runtime
+                        .execute_event(&mut state, previous_ref, &host_frame, &runtime_event);
+
+                match result {
+                    Ok(frame) => {
+                        let state_hash_str = hex::encode(frame.state_hash.0);
+                        let prev_state_hash_str =
+                            frame.prev_state_hash.as_ref().map(|h| hex::encode(h.0));
+                        self.storage.apply_state_and_frame(state.clone(), frame.clone());
+
+                        let _ = self
+                            .gossip_tx
+                            .send(GossipFrame {
+                                host_id: self.host_id.id.clone(),
+                                shard: self.host_id.shard.clone(),
+                                seq_no: frame.seq_no,
+                                state_hash: state_hash_str.clone(),
+                                prev_state_hash: prev_state_hash_str,
+                            })
+                            .await;
+
+                        RpcResponse::OkEventApplied {
+                            seq_no: frame.seq_no,
+                            state_hash: state_hash_str,
+                        }
+                    }
+                    Err(e) => RpcResponse::Error {
+                        error: format!("{:?}", e),
+                    },
+                }
             }
         }
     }
-}
 
     pub async fn serve(self, bind: SocketAddr) -> anyhow::Result<()> {
         let listener = TcpListener::bind(bind).await?;
