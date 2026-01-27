@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, Utc};
 
+use crate::sealed::inner::Sealed;
+
+/// Discrete, machine-checkable lifeforce bands for host safety.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum LifeforceBand {
     Safe,
@@ -8,38 +11,95 @@ pub enum LifeforceBand {
     HardStop,
 }
 
+/// Point-in-time lifeforce sample, normalized to [0.0, 1.0] where applicable.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LifeforceSample {
     pub ts_utc: DateTime<Utc>,
-    pub lifeforce_l: f32,           // [0.0, 1.0]
+    /// Scalar lifeforce index in [0.0, 1.0].
+    pub lifeforce_l: f32,
     pub band: LifeforceBand,
-    pub blood_level: f32,          // normalized BLOOD proxy
-    pub oxygen_level: f32,         // normalized OXYGEN proxy
-    pub clarity_index: f32,        // normalized cognitive clarity
+    /// Normalized BLOOD proxy in [0.0, 1.0].
+    pub blood_level: f32,
+    /// Normalized OXYGEN proxy in [0.0, 1.0].
+    pub oxygen_level: f32,
+    /// Normalized cognitive clarity in [0.0, 1.0].
+    pub clarity_index: f32,
 }
 
+/// Per-host lifeforce history.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct LifeforceBandSeries {
     pub host_id: String,
     pub samples: Vec<LifeforceSample>,
 }
 
+/// Inner, non-financial, per-host biophysical token state.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct BioTokenState {
+    pub brain:  f64,
+    pub wave:   f64,
+    pub blood:  f64,
+    pub oxygen: f64,
+    pub nano:   f64,
+    pub smart:  f64,
+}
+
+// Seal core types so mutation traits cannot be implemented on foreign types.
+impl Sealed for BioTokenState {}
+
+/// Host-level configuration and lifeforce/eco limits.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct HostEnvelope {
+    pub hostid: String,
+    pub brainmin: f64,
+    pub bloodmin: f64,
+    pub oxygenmin: f64,
+    pub nanomaxfraction: f64,
+    pub smartmax: f64,
+    pub ecoflopslimit: f64,
+}
+
+impl Sealed for HostEnvelope {}
+
+/// System-only adjustment to the inner ledger (no transfer semantics).
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SystemAdjustment {
+    pub deltabrain:  f64,
+    pub deltawave:   f64,
+    pub deltablood:  f64,
+    pub deltaoxygen: f64,
+    pub deltanano:   f64,
+    pub deltasmart:  f64,
+    /// Eco-cost in FLOPs, nJ, etc. for accounting.
+    pub ecocost:     f64,
+    /// Human-readable reason label (e.g. "quantum-learning-step").
+    pub reason:      String,
+}
+
+impl Sealed for SystemAdjustment {}
+
+/// Per-host WAVE safety curve as a function of BRAIN and fatigue.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SafetyCurveWave {
     pub host_id: String,
-    /// max WAVE as fraction of current BRAIN for given fatigue level.
+    /// Maximum WAVE as a fraction of current BRAIN at zero fatigue.
     pub max_wave_factor: f32,
+    /// Additional decay applied as fatigue approaches 1.0.
     pub fatigue_decay: f32,
 }
 
 impl SafetyCurveWave {
+    /// Compute a safe WAVE ceiling given current BRAIN and fatigue in [0.0, 1.0].
     pub fn safe_wave_ceiling(&self, brain: f64, fatigue: f64) -> f64 {
-        let f = (1.0 - fatigue.max(0.0).min(1.0) * self.fatigue_decay as f64)
-            * self.max_wave_factor as f64;
-        (brain * f).max(0.0)
+        let fatigue_clamped = fatigue.clamp(0.0, 1.0);
+        let decay = (1.0_f64 - fatigue_clamped * self.fatigue_decay as f64)
+            .max(0.0);
+        let factor = decay * self.max_wave_factor as f64;
+        (brain * factor).max(0.0)
     }
 }
 
+/// Discrete ecological impact bands.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub enum EcoBand {
     Low,
@@ -47,6 +107,7 @@ pub enum EcoBand {
     High,
 }
 
+/// Per-host eco-cost profile and derived eco band.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EcoBandProfile {
     pub host_id: String,
@@ -56,11 +117,13 @@ pub struct EcoBandProfile {
 }
 
 impl EcoBandProfile {
+    /// Minimum BRAIN required to sustain this eco-profile without overspending.
     pub fn econeutral_brain_required(&self, state_brain: f64) -> f64 {
-        match self.eco_band {
-            EcoBand::Low => state_brain * 0.1,
-            EcoBand::Medium => state_brain * 0.2,
-            EcoBand::High => state_brain * 0.3,
-        }
+        let multiplier = match self.eco_band {
+            EcoBand::Low => 0.10,
+            EcoBand::Medium => 0.20,
+            EcoBand::High => 0.30,
+        };
+        (state_brain * multiplier).max(0.0)
     }
 }
