@@ -1,50 +1,66 @@
 use serde::{Deserialize, Serialize};
+use chrono::{DateTime, Utc};
 
-/// Minimal ALN/DID identity header used for access control.
-/// Must be verified by outer ALN/DID infrastructure before use.
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
-pub struct IdentityHeader {
-    pub issuer_did: String,     // e.g., "bostrom18sd2u..." or "did:aln:..."
-    pub subject_role: String,   // "augmented-citizen" | "authorized-researcher" | "system-daemon"
-    pub network_tier: String,   // "inner-core" | "trusted-edge" | "sandbox"
-    pub knowledge_factor: f32,  // 0.0 – 1.0; min threshold required for risky ops
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub enum LifeforceBand {
+    Safe,
+    SoftWarn,
+    HardStop,
 }
 
-/// Biophysical token state per host — inner, non-financial, non-transferable.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct BioTokenState {
-    pub brain: f64,
-    pub wave: f64,
-    pub blood: f64,
-    pub oxygen: f64,
-    pub nano: f64,
-    pub smart: f64,
+pub struct LifeforceSample {
+    pub ts_utc: DateTime<Utc>,
+    pub lifeforce_l: f32,           // [0.0, 1.0]
+    pub band: LifeforceBand,
+    pub blood_level: f32,          // normalized BLOOD proxy
+    pub oxygen_level: f32,         // normalized OXYGEN proxy
+    pub clarity_index: f32,        // normalized cognitive clarity
 }
 
-/// Host-level configuration and lifeforce limits.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct HostEnvelope {
-    pub host_id: String,           // ALN/DID/Bostrom identifier of host
-    pub brain_min: f64,            // must stay >= 0.0
-    pub blood_min: f64,            // must stay  > 0.0
-    pub oxygen_min: f64,           // must stay  > 0.0
-    pub nano_max_fraction: f64,    // 0.0 – 1.0 fraction at which nano duties cap
-    pub smart_max: f64,            // max allowed SMART autonomy
-    pub eco_flops_limit: f64,      // eco FLOPs per epoch (host-bound)
+pub struct LifeforceBandSeries {
+    pub host_id: String,
+    pub samples: Vec<LifeforceSample>,
 }
 
-/// System-requested adjustment to the inner ledger.
-/// Only created by trusted system daemons, never by external users.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct SystemAdjustment {
-    pub delta_brain: f64,
-    pub delta_wave: f64,
-    pub delta_blood: f64,
-    pub delta_oxygen: f64,
-    pub delta_nano: f64,
-    pub delta_smart: f64,
-    /// Optional eco-cost (FLOPs, nJ, etc.) for accounting.
-    pub eco_cost: f64,
-    /// Operation label, e.g. "quantum-learning-step", "bioscale-upgrade".
-    pub reason: String,
+pub struct SafetyCurveWave {
+    pub host_id: String,
+    /// max WAVE as fraction of current BRAIN for given fatigue level.
+    pub max_wave_factor: f32,
+    pub fatigue_decay: f32,
+}
+
+impl SafetyCurveWave {
+    pub fn safe_wave_ceiling(&self, brain: f64, fatigue: f64) -> f64 {
+        let f = (1.0 - fatigue.max(0.0).min(1.0) * self.fatigue_decay as f64)
+            * self.max_wave_factor as f64;
+        (brain * f).max(0.0)
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub enum EcoBand {
+    Low,
+    Medium,
+    High,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct EcoBandProfile {
+    pub host_id: String,
+    pub avg_flops: f64,
+    pub avg_nj: f64,
+    pub eco_band: EcoBand,
+}
+
+impl EcoBandProfile {
+    pub fn econeutral_brain_required(&self, state_brain: f64) -> f64 {
+        match self.eco_band {
+            EcoBand::Low => state_brain * 0.1,
+            EcoBand::Medium => state_brain * 0.2,
+            EcoBand::High => state_brain * 0.3,
+        }
+    }
 }
