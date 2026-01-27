@@ -1,0 +1,450 @@
+name: ALN CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  lint:
+    name: Lint ALN Files
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          
+      - name: Cache Node modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Lint JavaScript
+        run: npm run lint
+        
+      - name: Lint ALN files
+        run: node aln/tools/aln_linter.js aln/
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    needs: [ubs-policy]
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          
+      - name: Cache Node modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Run unit tests
+        run: npm run test --workspace=aln/tests
+        
+      - name: Run core tests
+        run: npm run test --workspace=aln/core
+
+  build:
+    name: Build Explorer
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Build explorer
+        run: npm run build --workspace=aln/explorer --if-present
+
+  integration:
+    name: Integration Test
+    runs-on: ubuntu-latest
+    needs: [lint, test, build, did-admin-check]
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          
+      - name: Install dependencies
+        run: npm ci
+        
+      - name: Start node
+        run: |
+          cd aln/core
+          node cli/aln_node_cli.js init
+          node cli/aln_node_cli.js start &
+          sleep 10
+        
+      - name: Test node API
+        run: |
+          curl http://localhost:3000/status || exit 1
+          curl http://localhost:3000/health || exit 1
+
+  rust-integration:
+    name: Rust Integration Tests
+    runs-on: ubuntu-latest
+    needs: [integration]
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          components: clippy, rustfmt
+
+      - name: Install Rust dependencies
+        run: |
+          # Build workspace to download dependencies
+          cargo build --workspace --locked
+
+      - name: Cache cargo registry & build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/bin
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      - name: Run cw-multi-test integration tests
+        run: |
+          cd tests/integration
+          cargo test --manifest-path Cargo.toml --verbose
+      - name: Run CEM tests
+        run: |
+          cargo test -p cem -- --nocapture
+      - name: Run UBS and Trader-Pod tests
+        run: |
+          cargo test -p aln_ubs -- --nocapture || true
+          cargo test -p aln_trader_pod -- --nocapture || true
+      - name: Run Bridge tests
+        run: |
+          cargo test -p aln_bridge -- --nocapture || true
+      - name: Run aln_core tests
+        run: cargo test -p aln_core -- --nocapture
+
+  ubs-policy:
+    name: UBS Analyzer Policy
+    runs-on: ubuntu-latest
+    steps:
+        - uses: actions/checkout@v3
+
+        - name: Setup Rust toolchain
+          uses: actions-rs/toolchain@v1
+          with:
+            toolchain: stable
+
+        - name: Run UBS analyzer on contracts
+          run: |
+            # Generate UBS report artifacts for each contract wasm source
+            mkdir -p artifacts
+            for f in $(ls contracts/*/src | awk -F/ '{print $2}' | uniq); do
+              echo "Running UBS analyzer for $f"
+              # Use contract dir name as denom; analyzer will produce artifacts/ubs_report_$f.json
+              cargo run -p ubs_analyzer -- $f contracts/$f/src/main.rs || true
+            done
+            # Compute and display hash for each UBS report
+            for f in artifacts/ubs_report_*; do
+              if [ -f "$f" ]; then
+                echo "Hash for $f";
+                cargo run -p ubs_analyzer -- print-hash "$f" || true;
+              fi;
+            done
+            ls -la artifacts || true
+
+  wasm-artifacts:
+      name: Build WASM Artifacts + Optimize
+      runs-on: ubuntu-latest
+      needs: [rust-integration, ubs-policy]
+      steps:
+        - uses: actions/checkout@v3
+
+        - name: Cache cargo registry & build
+          uses: actions/cache@v4
+          with:
+            path: |
+              ~/.cargo/registry
+              ~/.cargo/bin
+              target
+            key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+            restore-keys: ${{ runner.os }}-cargo-
+
+        - name: Setup Rust toolchain
+          uses: actions-rs/toolchain@v1
+          with:
+            toolchain: stable
+            components: clippy, rustfmt
+
+        - name: Add wasm32 target
+          run: rustup target add wasm32-unknown-unknown
+
+        - name: Install wasm-opt (binaryen)
+          run: sudo apt-get update && sudo apt-get install -y binaryen
+
+        - name: Build contract WASM files
+          run: |
+            set -e
+            mkdir -p artifacts
+            # build all contract crates for wasm32
+            cargo build --release --target wasm32-unknown-unknown -p aln_auet
+            cargo build --release --target wasm32-unknown-unknown -p aln_csp
+            cargo build --release --target wasm32-unknown-unknown -p aln_registry
+            cargo build --release --target wasm32-unknown-unknown -p aln_bridge
+            cargo build --release --target wasm32-unknown-unknown -p energy_router
+            # move artifacts to artifacts/ with deterministic names
+            cp target/wasm32-unknown-unknown/release/aln_auet.wasm artifacts/aln_auet.wasm
+            cp target/wasm32-unknown-unknown/release/aln_csp.wasm artifacts/aln_csp.wasm
+            cp target/wasm32-unknown-unknown/release/aln_registry.wasm artifacts/aln_registry.wasm
+            cp target/wasm32-unknown-unknown/release/aln_bridge.wasm artifacts/aln_bridge.wasm
+            cp target/wasm32-unknown-unknown/release/energy_router.wasm artifacts/energy_router.wasm
+
+        - name: Optimize artifacts with wasm-opt
+          run: |
+            wasm-opt -Oz -o artifacts/aln_auet.optimized.wasm artifacts/aln_auet.wasm || true
+            wasm-opt -Oz -o artifacts/aln_csp.optimized.wasm artifacts/aln_csp.wasm || true
+            wasm-opt -Oz -o artifacts/aln_registry.optimized.wasm artifacts/aln_registry.wasm || true
+            wasm-opt -Oz -o artifacts/aln_bridge.optimized.wasm artifacts/aln_bridge.wasm || true
+            wasm-opt -Oz -o artifacts/energy_router.optimized.wasm artifacts/energy_router.wasm || true
+
+        - name: Generate provenance artifacts
+          run: |
+            cargo build -p did_provenance --release
+            ./target/release/did_provenance prove-wasm artifacts/aln_auet.wasm aln_auet || true
+            ./target/release/did_provenance prove-wasm artifacts/aln_csp.wasm aln_csp || true
+            ./target/release/did_provenance prove-wasm artifacts/aln_registry.wasm aln_registry || true
+            ./target/release/did_provenance prove-wasm artifacts/aln_bridge.wasm aln_bridge || true
+            ./target/release/did_provenance prove-wasm artifacts/energy_router.wasm energy_router || true
+
+        - name: Run wasm size analysis
+          run: |
+            cargo build -p wasm_analysis --release
+            ./target/release/wasm_analysis artifacts 2097152 || true
+
+        - name: Upload artifacts
+          uses: actions/upload-artifact@v4
+          with:
+            name: wasm-artifacts
+            path: artifacts
+
+    rust-benchmarks:
+      name: Rust Benchmarks (periodic)
+      runs-on: ubuntu-latest
+      if: github.event_name == 'schedule' || github.ref == 'refs/heads/main'
+      steps:
+        - uses: actions/checkout@v3
+        - name: Setup Rust
+          uses: actions-rs/toolchain@v1
+          with: { toolchain: stable }
+        - name: Run benches
+          run: |
+            cargo bench -p aln_bridge -- --nocapture
+
+  indexer-tests:
+    name: Indexer Tests
+    runs-on: ubuntu-latest
+    needs: [rust-integration]
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: aln_indexer_test
+        ports:
+          - 5432:5432
+        options: >
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - name: Setup Postgres client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          until pg_isready --host=localhost --port=5432; do sleep 1; done
+      - name: Run indexer unit tests & fixtures
+        env:
+          DATABASE_URL: postgres://postgres:password@localhost:5432/aln_indexer_test
+        run: |
+          set -e
+          # Apply global schema and migrations
+          psql -U postgres -d aln_indexer_test -f db/schema.sql
+          psql -U postgres -d aln_indexer_test -f db/retention_compaction.sql
+          psql -U postgres -d aln_indexer_test -f crates/aln_indexer/migrations/V1__init.sql
+          psql -U postgres -d aln_indexer_test -f crates/aln_indexer/migrations/V2__rollup_unique_index.sql
+          psql -U postgres -d aln_indexer_test -f crates/aln_indexer/migrations/V3__tx_and_indexer_state.sql
+          psql -U postgres -d aln_indexer_test -f crates/aln_indexer/migrations/V4__token_classes.sql
+          # Load fixtures
+          psql -U postgres -d aln_indexer_test -f crates/aln_indexer/fixtures/fixture.sql
+          # Run the tests
+          cargo test -p aln_indexer -- --nocapture
+
+  indexer-replay-smoke:
+    name: Indexer Replay Smoke Test
+    runs-on: ubuntu-latest
+    needs: [indexer-tests]
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: aln_indexer_test
+        ports:
+          - 5432:5432
+        options: >
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      - name: Wait for Postgres
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+          until pg_isready --host=localhost --port=5432; do sleep 1; done
+      - name: Apply migrations & seed simple blocks
+        env:
+          DATABASE_URL: postgres://postgres:password@localhost:5432/aln_indexer_test
+        run: |
+          set -e
+          psql -U postgres -d aln_indexer_test -f db/schema.sql
+          psql -U postgres -d aln_indexer_test -f db/retention_compaction.sql
+          psql -U postgres -d aln_indexer_test -f crates/aln_indexer/migrations/V1__init.sql
+          psql -U postgres -d aln_indexer_test -f crates/aln_indexer/migrations/V2__rollup_unique_index.sql
+          psql -U postgres -d aln_indexer_test -f crates/aln_indexer/migrations/V3__tx_and_indexer_state.sql
+          psql -U postgres -d aln_indexer_test -f crates/aln_indexer/migrations/V4__token_classes.sql
+          # seed canonical blocks 1..20
+          psql -U postgres -d aln_indexer_test -c "INSERT INTO blocks (height, hash, parent_hash, indexed_at, is_canonical) VALUES (1, 'h1','h0',now(),true) ON CONFLICT DO NOTHING;"
+          for i in $(seq 2 20); do psql -U postgres -d aln_indexer_test -c "INSERT INTO blocks (height, hash, parent_hash, indexed_at, is_canonical) VALUES ($i, 'h${i}', 'h$((i-1))', now(), true) ON CONFLICT DO NOTHING;"; done
+      - name: Start mock RPC server and run ReplayFrom
+        run: |
+          cat > mock_rpc.js <<'EOF'
+          const http = require('http');
+          const url = require('url');
+          const port = 26657;
+          const server = http.createServer((req, res) => {
+            const q = url.parse(req.url, true);
+            if (q.pathname === '/status') {
+              res.writeHead(200, {'Content-Type': 'application/json'});
+              res.end(JSON.stringify({ result: { sync_info: { latest_block_height: '25' } } }));
+              return;
+            }
+            if (q.pathname === '/block') {
+              const height = q.query.height || '1';
+              const h = parseInt(height, 10);
+              const hash = (h >= 11) ? `h${h}b` : `h${h}`;
+              const lastHash = `h${Math.max(1,h-1)}`;
+              const result = { block_id: { hash }, block: { header: { height: height.toString(), last_block_id: { hash: lastHash } }, data: { txs: null } } };
+              res.writeHead(200, {'Content-Type': 'application/json'});
+              res.end(JSON.stringify({ result }));
+              return;
+            }
+            res.writeHead(404);
+            res.end();
+          });
+          server.listen(port);
+          EOF
+          node mock_rpc.js &
+          sleep 1
+          # Run replay to pick up new branch
+          cargo run -p aln_indexer -- ReplayFrom --chain-id 1 --from-height 11 --rpc-endpoint http://127.0.0.1:26657
+      - name: Validate DB after replay
+        env:
+          DATABASE_URL: postgres://postgres:password@localhost:5432/aln_indexer_test
+        run: |
+          set -e
+          # canonical blocks >= 11 should exist with suffix 'b'
+          COUNT=$(psql -U postgres -d aln_indexer_test -t -c "SELECT COUNT(*) FROM blocks WHERE is_canonical = true AND height >= 11 AND hash LIKE 'h%b'")
+          if [ "$COUNT" -lt "15" ]; then echo "Expected >=15 canonical blocks with suffix b, got $COUNT"; exit 1; fi
+
+  cem-metrics-smoke:
+    name: CEM Metrics Smoke Test
+    runs-on: ubuntu-latest
+    needs: [rust-integration]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - name: Build CEM binary
+        run: |
+          set -e
+          cargo build -p cem --release
+      - name: Create sample dataset
+        run: |
+          cat > sample.json <<'EOF'
+          [
+            {"timestamp_ns":1,"subject_id":1,"session_id":1,"segment_id":"s1","ax":0.1,"ay":0.0,"az":0.0,"gx":0.1,"gy":0.0,"gz":0.0,"mx":0.0,"my":0.0,"mz":0.0,"f_normal":1.0,"f_tangential":0.0,"event_count":1.0,"event_polarity_mean":0.0,"eeg_band_power":[0.1],"emg_rms":0.1,"p_mw_measured":10.0},
+            {"timestamp_ns":2,"subject_id":1,"session_id":1,"segment_id":"s2","ax":0.2,"ay":0.0,"az":0.0,"gx":0.2,"gy":0.0,"gz":0.0,"mx":0.0,"my":0.0,"mz":0.0,"f_normal":1.0,"f_tangential":0.0,"event_count":1.0,"event_polarity_mean":0.0,"eeg_band_power":[0.1],"emg_rms":0.1,"p_mw_measured":12.0},
+            {"timestamp_ns":3,"subject_id":1,"session_id":1,"segment_id":"s3","ax":0.3,"ay":0.0,"az":0.0,"gx":0.3,"gy":0.0,"gz":0.0,"mx":0.0,"my":0.0,"mz":0.0,"f_normal":1.0,"f_tangential":0.0,"event_count":1.0,"event_polarity_mean":0.0,"eeg_band_power":[0.1],"emg_rms":0.1,"p_mw_measured":14.0},
+            {"timestamp_ns":4,"subject_id":1,"session_id":1,"segment_id":"s4","ax":0.4,"ay":0.0,"az":0.0,"gx":0.4,"gy":0.0,"gz":0.0,"mx":0.0,"my":0.0,"mz":0.0,"f_normal":1.0,"f_tangential":0.0,"event_count":1.0,"event_polarity_mean":0.0,"eeg_band_power":[0.1],"emg_rms":0.1,"p_mw_measured":16.0},
+            {"timestamp_ns":5,"subject_id":1,"session_id":1,"segment_id":"s5","ax":0.5,"ay":0.0,"az":0.0,"gx":0.5,"gy":0.0,"gz":0.0,"mx":0.0,"my":0.0,"mz":0.0,"f_normal":1.0,"f_tangential":0.0,"event_count":1.0,"event_polarity_mean":0.0,"eeg_band_power":[0.1],"emg_rms":0.1,"p_mw_measured":18.0}
+          ]
+          EOF
+      - name: Start CEM with metrics enabled
+        run: |
+          ./target/release/cem --subject 1 --session 1 --input sample.json --metrics-addr 127.0.0.1:9889 &
+          sleep 2
+      - name: Curl metrics and verify
+        run: |
+          curl -f http://127.0.0.1:9889/metrics | grep cem_calibrations_total
+
+    did-admin-check:
+      name: DID Admin Check
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v3
+        - name: Setup Rust toolchain
+          uses: actions-rs/toolchain@v1
+          with:
+            toolchain: stable
+        - name: Run did admin check
+          env:
+            ALN_OPERATOR_DID: "did:ion:EXAMPLEOPERATOR"
+          run: |
+            cargo run -p did_provenance -- did-admin-check || exit 1
