@@ -103,3 +103,20 @@ impl CivicRewardProfile {
         m.clamp(self.multiplier_min, self.multiplier_max)
     }
 }
+
+#[cfg(feature = "wasm")]
+pub mod wasm_profile {
+    use super::CivicRewardProfile;
+    use once_cell::sync::OnceCell;
+    use std::sync::OnceLock;
+
+    static PROFILE: OnceCell<CivicRewardProfile> = OnceCell::new();
+
+    pub fn set_profile(profile: CivicRewardProfile) {
+        let _ = PROFILE.set(profile);
+    }
+
+    pub fn get_profile() -> &'static CivicRewardProfile {
+        PROFILE.get().expect("CivicRewardProfile not initialized")
+    }
+}
