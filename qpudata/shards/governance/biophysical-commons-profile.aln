@@ -1,0 +1,23 @@
+# path: qpudata/shards/governance/biophysical-commons-profile.aln
+
+version 1.0
+schema biospectre.biophysical_commons
+
+rules:
+  symmetric_limits:
+    description "All hosts, including authors, obey identical safety and non‑financial rules."
+    special_exemptions_allowed false
+
+  role_eligibility:
+    description "Eligibility for augmented-citizen / authorized-researcher is open and procedure-based."
+    criteria [
+      "demonstrated_biophysics_knowledge >= threshold",
+      "ethics_alignment == true",
+      "valid_did_aln_bostrom == true"
+    ]
+    capital_or_affiliation_required false
+
+  platform_control:
+    description "Inner/outer separation blocks platform coercion, not host participation."
+    may_gate_neural_functionality false
+    may_require_subscription_for_core_access false
