@@ -1,0 +1,19 @@
+[package]
+name = "bci-bioledger-bridge"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "BCI/EEG → biophysical-blockchain bridge with neural-rope and lifeforce-gated SystemAdjustment minting."
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+
+# Your existing crates:
+biophysical-blockchain = { path = "../biophysical-blockchain" }
+bioscaleupgradeservice = { path = "../bioscaleupgradeservice" }   # provides NeuralRope[file:1]
+augdoctorpolicies = { path = "../augdoctorpolicies" }             # ShotLevelPolicy, NeuroHandshake[file:1]
+
+[features]
+default = []
