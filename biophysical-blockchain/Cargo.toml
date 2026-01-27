@@ -1,0 +1,20 @@
+[package]
+name = "biophysical-blockchain"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Inner biophysical-blockchain crate for BRAIN/WAVE/BLOOD/OXYGEN/NANO/SMART with ALN/DID access and lifeforce-gated multi-host sync."
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+blake3 = "1.5"
+thiserror = "1.0"
+
+[features]
+# `host` = compiled inside trusted, ALN/DID-governed hosts only.
+host = []
+
+[lib]
+name = "biophysical_blockchain"
+path = "src/lib.rs"
