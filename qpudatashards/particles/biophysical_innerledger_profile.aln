@@ -1,0 +1,65 @@
+destination-path qpudatashards/particles/biophysical_innerledger_profile.aln
+version 1.0
+schema biospectre.biophysicalinnerledger
+hostid bostrom18sd2ujv24ual9c9pshtxys6j8knh6xaead9ye7
+sessionutc 2026-01-27T12:05:00Z
+
+ledger
+  mode "inner-only"
+  transfer_enabled false
+  bridge_enabled false
+  staking_enabled false
+  financialization_allowed false
+
+tokens
+  brain
+    unit "brain_quanta"
+    source_indices "SN3,S?,ecoFLOPs"
+    max_epoch_load 1000000.0
+    nightly_soft_cap 50000000.0
+    description "Cognitive load and compute capacity for organic_cpu workloads"
+  wave
+    unit "signal_wave"
+    source_indices "BCI_bandwidth,artifact_cleanliness"
+    duty_cycle_max_pct 0.40
+    cooldown_sec 600
+    description "Neural signal routing and bandwidth tokens"
+  blood
+    unit "mL_equiv"
+    source_indices "hemodynamic_stability"
+    max_drain_per_night 5.0
+    safety_band_low 0.36
+    safety_band_high 0.49
+    description "Metabolic draw proxy with lifeforce protection"
+  oxygen
+    unit "O2_index"
+    source_indices "SpO2,respiratory_stability"
+    min_safe_band 0.92
+    max_safe_band 0.99
+    description "Oxygen availability and safe respiratory load"
+  nano
+    unit "nano_cycle"
+    source_indices "NANO_LIFEBAND_router"
+    max_active_fraction 0.25
+    description "Nanomachine orchestration cycles routed through lifeforce bands"
+
+access_control
+  identity_scheme "DID/ALN/Bostrom"
+  required_role "augmented_citizen"
+  ai_chat_permissions "simulate-only"
+  external_write_allowed false
+
+governance
+  consent_anchor_schema "biospectre.consentprofile"
+  provenance_schema "biospectre.custodyprofile"
+  role_model "donor,custodian,researcher,regulator"
+  oligarchy_prevention "no_stake_voting"
+  auditability "full, versioned, ALN-logged"
+
+eco_alignment
+  avg_flops_per_epoch 640.0
+  avg_energynj_per_epoch 52.0
+  energy_reduction_vs_baseline_pct 25.0
+  estimated_device_hours_saved_per_night 1.4
+  infratype "CPU-only, sleep-optimized"
+  proofhex 0xECOB10C7F
