@@ -378,67 +378,78 @@ where
         }
     }
 
-    async fn handle_rpc(&self, req: RpcRequest) -> RpcResponse {
-        match req {
-            RpcRequest::GetStateSummary {} => {
-                let s = self.storage.read_state();
-                RpcResponse::OkStateSummary {
-                    summary: StateSummary {
-                        brain: s.brain,
-                        wave: s.wave,
-                        blood: s.blood,
-                        oxygen: s.oxygen,
-                        nano: s.nano,
-                        smart: s.smart,
-                        lorentz_ts: (s.lorentz_ts.0, s.lorentz_ts.1),
-                    },
-                }
+   async fn handle_rpc(&self, req: RpcRequest) -> RpcResponse {
+    match req {
+        RpcRequest::GetStateSummary { header } => {
+            if let Err(e) = validate_rpc_header(&header) {
+                return RpcResponse::Error { error: e };
             }
-            RpcRequest::SubmitEvent { event } => {
-                let mut state = self.storage.read_state();
-                let host_frame = self.build_host_frame();
-                state.lorentz_ts = host_frame.lorentz_ts;
+            let s = self.storage.read_state();
+            RpcResponse::OkStateSummary {
+                summary: StateSummary {
+                    brain: s.brain,
+                    wave: s.wave,
+                    blood: s.blood,
+                    oxygen: s.oxygen,
+                    nano: s.nano,
+                    smart: s.smart,
+                    lorentz_ts: (s.lorentz_ts.0, s.lorentz_ts.1),
+                },
+            }
+        }
+        RpcRequest::SubmitEvent { header, event } => {
+            if let Err(e) = validate_rpc_header(&header) {
+                return RpcResponse::Error { error: e };
+            }
+            // Explicitly refuse sandbox network tier for mutating calls.
+            if header.network_tier == "sandbox" {
+                return RpcResponse::Error {
+                    error: "sandbox tier cannot submit mutating events".to_string(),
+                };
+            }
 
-                let runtime_event = self.convert_rpc_event(event);
-                let previous = self.storage.read_last_frame();
-                let previous_ref = previous.as_ref();
+            let mut state = self.storage.read_state();
+            let host_frame = self.build_host_frame();
+            state.lorentz_ts = host_frame.lorentz_ts;
 
-                let result: RuntimeResult<biospectre_consensus::ConsensusFrame> = self
-                    .runtime
+            let runtime_event = self.convert_rpc_event(event);
+            let previous = self.storage.read_last_frame();
+            let previous_ref = previous.as_ref();
+
+            let result: RuntimeResult<biospectre_consensus::ConsensusFrame> =
+                self.runtime
                     .execute_event(&mut state, previous_ref, &host_frame, &runtime_event);
 
-                match result {
-                    Ok(frame) => {
-                        let state_hash_str = hex::encode(frame.state_hash.0);
-                        let prev_state_hash_str = frame
-                            .prev_state_hash
-                            .as_ref()
-                            .map(|h| hex::encode(h.0));
-                        self.storage.apply_state_and_frame(state.clone(), frame.clone());
+            match result {
+                Ok(frame) => {
+                    let state_hash_str = hex::encode(frame.state_hash.0);
+                    let prev_state_hash_str =
+                        frame.prev_state_hash.as_ref().map(|h| hex::encode(h.0));
+                    self.storage.apply_state_and_frame(state.clone(), frame.clone());
 
-                        let _ = self
-                            .gossip_tx
-                            .send(GossipFrame {
-                                host_id: self.host_id.id.clone(),
-                                shard: self.host_id.shard.clone(),
-                                seq_no: frame.seq_no,
-                                state_hash: state_hash_str.clone(),
-                                prev_state_hash: prev_state_hash_str,
-                            })
-                            .await;
-
-                        RpcResponse::OkEventApplied {
+                    let _ = self
+                        .gossip_tx
+                        .send(GossipFrame {
+                            host_id: self.host_id.id.clone(),
+                            shard: self.host_id.shard.clone(),
                             seq_no: frame.seq_no,
-                            state_hash: state_hash_str,
-                        }
+                            state_hash: state_hash_str.clone(),
+                            prev_state_hash: prev_state_hash_str,
+                        })
+                        .await;
+
+                    RpcResponse::OkEventApplied {
+                        seq_no: frame.seq_no,
+                        state_hash: state_hash_str,
                     }
-                    Err(e) => RpcResponse::Error {
-                        error: format!("{:?}", e),
-                    },
                 }
+                Err(e) => RpcResponse::Error {
+                    error: format!("{:?}", e),
+                },
             }
         }
     }
+}
 
     pub async fn serve(self, bind: SocketAddr) -> anyhow::Result<()> {
         let listener = TcpListener::bind(bind).await?;
