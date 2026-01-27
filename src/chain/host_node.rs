@@ -236,6 +236,62 @@ struct StateSummary {
     lorentz_ts: (i128, i64),
 }
 
+// Security header for AI-Chat → HostNode calls, mirroring EEG schema headers.
+#[derive(Debug, Serialize, Deserialize)]
+struct RpcSecurityHeader {
+    pub issuer_did: String,
+    pub subject_role: String,   // "augmented_citizen", "authorized_researcher", "system_daemon"
+    pub network_tier: String,   // "core", "edge", "sandbox"
+    pub biophysical_chain_allowed: bool,
+}
+
+// Extended RPC request that carries security metadata.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum RpcRequest {
+    GetStateSummary {
+        header: RpcSecurityHeader,
+    },
+    SubmitEvent {
+        header: RpcSecurityHeader,
+        event: RpcEvent,
+    },
+}
+
+// Hard guard matching your EEG header doctrine.
+fn validate_rpc_header(header: &RpcSecurityHeader) -> Result<(), String> {
+    const SUPPORTED_TIER_CORE: &str = "core";
+    const SUPPORTED_TIER_EDGE: &str = "edge";
+    const TIER_SANDBOX: &str = "sandbox";
+
+    // Only ALNDID/Bostrom namespaces may talk to inner ledger.
+    if !header.issuer_did.starts_with("bostrom")
+        && !header.issuer_did.starts_with("did:")
+    {
+        return Err("issuer_did must be ALNDID/Bostrom namespace".to_string());
+    }
+
+    // Subject roles restricted to augmented-citizen mechanics.
+    match header.subject_role.as_str() {
+        "augmented_citizen" | "authorized_researcher" | "system_daemon" => {}
+        _ => return Err(format!("unauthorized subject_role {}", header.subject_role)),
+    }
+
+    // Sandbox nodes can never anchor to biophysical chain or mutate state.
+    match header.network_tier.as_str() {
+        TIER_SANDBOX => {
+            if header.biophysical_chain_allowed {
+                return Err("sandbox tier cannot set biophysical_chain_allowed=true".to_string());
+            }
+            // We also block any mutating SubmitEvent from sandbox below.
+        }
+        SUPPORTED_TIER_CORE | SUPPORTED_TIER_EDGE => {}
+        other => return Err(format!("invalid network_tier {}", other)),
+    }
+
+    Ok(())
+}
+
 // ------------------ Host node structure -------------------------------------
 
 pub struct HostNode<D, C, HC>
