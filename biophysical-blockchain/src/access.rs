@@ -1,4 +1,16 @@
+//! Biophysical access control for shared sovereignty.
+//!
+//! This module enforces that only identities with clearly defined
+//! responsibilities (augmented citizens, authorized researchers,
+//! system daemons) and sufficient biophysical understanding can
+//! request changes to a host’s inner ledger.
+//!
+//! The goal is protection, not hierarchy: every rule here exists
+//! to keep biophysical sovereignty, non‑financial design, and
+//! neurorights intact for all hosts.
+
 use crate::types::IdentityHeader;
+use crate::RoleClass;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -13,21 +25,23 @@ pub enum AccessError {
     KnowledgeTooLow { have: f32, need: f32 },
 }
 
-/// Hard separation of mechanics — only augmented-citizens, authorized-researchers,
-/// and system-daemons on inner-core / trusted-edge can interact with the
-/// biophysical blockchain. No sandbox, no arbitrary 3rd-party vendors.[file:1]
+/// Hard separation of mechanics: only augmented‑citizens, authorized
+/// researchers, and system daemons on inner‑core / trusted‑edge tiers
+/// may interact with the inner ledger. No sandbox, no arbitrary
+/// third‑party vendors.
 pub fn validate_identity_for_inner_ledger(
     header: &IdentityHeader,
     required_k: f32,
 ) -> Result<(), AccessError> {
     let role_ok = matches!(
-        header.subject_role.as_str(),
-        "augmented-citizen" | "authorized-researcher" | "system-daemon"
+        header.subject_role,
+        RoleClass::AugmentedCitizen | RoleClass::AuthorizedResearcher | RoleClass::SystemDaemon
     );
     if !role_ok {
-        return Err(AccessError::UnauthorizedRole(
-            header.subject_role.clone(),
-        ));
+        return Err(AccessError::UnauthorizedRole(format!(
+            "{:?}",
+            header.subject_role
+        )));
     }
 
     if header.network_tier == "sandbox" {
