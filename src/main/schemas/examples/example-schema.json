@@ -1,0 +1,84 @@
+{
+  "$id": "https://augdoctor.org/schema/eeg_feature_summary.json",
+  "title": "EEGFeatureSummary",
+  "type": "object",
+  "description": "Compact, non-identity EEG feature summary for neural-rope few-shot prompting.",
+  "properties": {
+    "session_id": {
+      "type": "string",
+      "description": "Ephemeral session identifier (no PII)."
+    },
+    "environment_id": {
+      "type": "string",
+      "description": "Device or environment identifier (e.g., prosthetic ID)."
+    },
+    "intent_label": {
+      "type": "string",
+      "description": "Decoded intent label (e.g., left_grasp, rotate_clockwise)."
+    },
+    "channel_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 512
+    },
+    "fs_hz": {
+      "type": "integer",
+      "minimum": 50,
+      "maximum": 5000
+    },
+    "band_alpha_power": {
+      "type": "number",
+      "description": "Average alpha band power (e.g., 8–13 Hz)."
+    },
+    "band_beta_power": {
+      "type": "number",
+      "description": "Average beta band power (e.g., 13–30 Hz)."
+    },
+    "band_gamma_power": {
+      "type": "number",
+      "description": "Average gamma band power (optional; 30+ Hz)."
+    },
+    "csp_component": {
+      "type": "number",
+      "description": "Representative CSP feature for motor imagery decoding."
+    },
+    "erp_latency_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000,
+      "description": "Latency of event-related potential peak."
+    },
+    "classifier_confidence": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0,
+      "description": "Confidence score from EEG classifier."
+    },
+    "reward_score": {
+      "type": "number",
+      "minimum": -1.0,
+      "maximum": 1.0,
+      "description": "Task-level reward (success, smoothness, safety)."
+    },
+    "safety_decision": {
+      "type": "string",
+      "enum": ["Allow", "AllowWithRedaction", "Deny"],
+      "description": "Guard outcome at time of execution."
+    }
+  },
+  "required": [
+    "session_id",
+    "environment_id",
+    "intent_label",
+    "channel_count",
+    "fs_hz",
+    "band_alpha_power",
+    "band_beta_power",
+    "csp_component",
+    "erp_latency_ms",
+    "classifier_confidence",
+    "reward_score",
+    "safety_decision"
+  ],
+  "additionalProperties": false
+}
