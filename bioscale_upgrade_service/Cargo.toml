@@ -1,0 +1,31 @@
+[package]
+name = "bioscale_upgrade_service"
+version = "0.1.0"
+edition = "2021"
+description = "Quantum-learning bioscale safety microservice with neural-rope assisted learning."
+license = "MIT"
+
+[dependencies]
+bioscale_upgrade_store = { path = "../bioscale_upgrade_store" }
+augdoctor_core = { path = "../augdoctor_core" }
+
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+uuid = { version = "1.7", features = ["v4"] }
+
+# HTTP stack for native microservice
+tokio = { version = "1.37", features = ["macros", "rt-multi-thread"] }
+hyper = { version = "1.2", features = ["http1", "server"] }
+http-body-util = "0.1"
+bytes = "1.6"
+
+# Rope-like buffer for neural traces
+flo_rope = "0.5"  # robust rope with attributes[web:30]
+
+# WASM binding (optional; enabled via `wasm` feature)
+wasm-bindgen = { version = "0.2", optional = true }
+
+[features]
+default = []
+wasm = ["wasm-bindgen"]
