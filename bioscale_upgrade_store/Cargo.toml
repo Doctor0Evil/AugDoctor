@@ -1,0 +1,17 @@
+[package]
+name = "bioscale_upgrade_store"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Bioscale upgrade registry and enforcement layer for AugDoctor-compatible quantum-learning systems."
+repository = "https://github.com/Doctor0Evil/Biospectre-Doctrine"
+keywords = ["bioscale", "bci", "biophysics", "augmentation", "rust"]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+uuid = { version = "1.7", features = ["v4"] }
+thiserror = "1.0"
+
+# These represent your existing or companion crates; adjust paths or versions as needed.
+augdoctor_core = { path = "../augdoctor_core" }
