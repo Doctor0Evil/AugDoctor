@@ -1,0 +1,15 @@
+[package]
+name = "quantum_cons_net"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Quantum-learning network for consciousness-guarded biophysical security."
+repository = "https://github.com/Doctor0Evil/AugDoctor"
+keywords = ["quantum", "consciousness", "biophysics", "rust"]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+uuid = "1.7"
+thiserror = "1.0"
+rand = "0.8"  # For simulated quantum randomness
+augdoctor_core = { path = "../augdoctor_core" }  # Link to core for plane_classifier
