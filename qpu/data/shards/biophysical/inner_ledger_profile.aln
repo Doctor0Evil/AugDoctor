@@ -1,0 +1,133 @@
+text
+destination-path qpu/data/shards/biophysical/inner_ledger_profile.aln
+version 1.1
+schema biospectre.biophysical_inner_ledger
+
+host_id bostrom18sd2ujv24ual9c9pshtxys6j8knh6xaead9ye7
+session_utc 2026-01-29T15:29:00Z
+
+ledger
+  mode                 inner-only
+  transfer_enabled     false
+  bridge_enabled       false
+  staking_enabled      false
+  financialization_allowed false
+
+  // Tokens are capacity + safety bands, not currency.
+  tokens
+    brain
+      unit             "brain_quanta"
+      source_indices   SN3,S?,ecoFLOPs
+      max_epoch_load   1000000.0
+      nightly_soft_cap 50000000.0
+      description      "Cognitive load + organic_cpu compute capacity for this host only."
+
+    wave
+      unit             "signal_wave"
+      source_indices   BCI_bandwidth,artifact_cleanliness
+      duty_cycle_max_pct 0.40
+      cooldown_sec     600
+      description      "Learning / ingestion ceiling; always bounded by BRAIN + lifeforce."
+
+    blood
+      unit             "ml_equiv"
+      source_indices   hemodynamic_stability
+      max_drain_per_night 5.0
+      safety_band_low  0.36
+      safety_band_high 0.49
+      description      "Metabolic draw proxy with lifeforce guarantees."
+
+    oxygen
+      unit             "O2_index"
+      source_indices   SpO2,respiratory_stability
+      min_safe_band    0.92
+      max_safe_band    0.99
+      description      "Respiratory margin; must never cross negative or unsafe bands."
+
+    nano
+      unit             "nano_cycle"
+      source_indices   NANO_LIFEBAND_router
+      max_active_fraction 0.25
+      description      "Nanomachine orchestration envelope; routes via lifeforce bands only."
+
+    smart
+      unit             "autonomy_quanta"
+      source_indices   ecoFLOPs,governance_state
+      max_factor_of_brain 1.0
+      min_manual_threshold 0.05
+      description      "Automation allowance strictly subordinate to BRAIN/BLOOD/OXYGEN/NANO safety."
+
+access_control
+  identity_scheme      DID_ALN_Bostrom
+  required_role        augmented_citizen
+  ai_chat_permissions  simulate-only
+  external_write_allowed false
+
+  // Explicit anti-seizure and anti-oligarchy guarantees.
+  sovereignty_guards
+    forbid_third_party_freeze     true
+    forbid_third_party_burn       true
+    forbid_cross_host_transfer    true
+    forbid_financial_collateral   true
+
+  // Only the host or designated ethical operators may request changes,
+  // and only via biophysical-runtime rules.
+  roles
+    host
+      may
+        - read_all_state
+        - request_evolution_upgrade
+        - request_wave_load
+        - request_smart_autonomy
+      must
+        - supply_self_consent_for_irreversible_ops
+        - respect_lifeforce_bands
+
+    ethical_operator
+      may
+        - request_wave_load
+        - request_smart_autonomy
+      must
+        - present_host_bound_consent
+        - obey_neurorights_policy
+
+    vendor
+      may
+        - read_redacted_summaries
+      must_not
+        - change_tokens
+        - gate_core_functionality
+        - monetize_augmentation_rights
+
+    regulator
+      may
+        - audit_logs
+        - inspect_policies
+      must_not
+        - adjust_balances
+        - impose_financial_gating
+
+governance
+  consent_anchor_schema biospectre.consent_profile
+  provenance_schema     biospectre.custody_profile
+  role_model            host,custodian,researcher,regulator
+
+  oligarchy_prevention
+    stake_voting_enabled false
+    machine_only_governors_forbidden true
+    community_ethics_board_required  true
+
+  neurorights_guards
+    souls_modifiable     false
+    consciousness_tokenizable false
+    cross_host_cost_externalization_forbidden true
+    self_augmentation_only true
+
+eco_alignment
+  avg_flops_per_epoch           640.0
+  avg_energy_nj_per_epoch       52.0
+  energy_reduction_vs_baseline_pct 25.0
+  estimated_device_hours_saved_per_night 1.4
+  infra_type                    "CPU-only, sleep-optimized"
+
+proof_hex 0xECO_B10C7F_RIGHTS_2026
