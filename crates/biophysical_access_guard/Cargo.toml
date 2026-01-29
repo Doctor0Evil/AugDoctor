@@ -1,0 +1,14 @@
+[package]
+name = "biophysical_access_guard"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Strict access guard for biophysical-blockchain and neural-rope sovereignty."
+repository = "https://github.com/Doctor0Evil/AugDoctor"
+keywords = ["biophysics", "access-control", "neurorights", "rust"]
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+uuid = "1.7"
+thiserror = "1.0"
+augdoctor_core = { path = "../augdoctor_core" }  # Adjust to your core crate path
