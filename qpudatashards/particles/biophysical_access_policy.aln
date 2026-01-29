@@ -1,0 +1,25 @@
+version 1.0
+schema BiophysicalAccessPolicy
+  string did_identity  # DID/ALN/Bostrom string
+  float knowledge_factor  # >= 0.7
+  string role  # "AugmentedCitizen" | "AuthorizedResearcher" | "SystemDaemon"
+  string consciousness_state  # "ActiveImmutable"
+  bool external_access_allowed  # false
+  uint eco_points_min  # 5
+  hex audit_prefix  # 0xACCESSGUARD
+ledger
+  mode "inner-only"
+  financialization_allowed false
+  cloning_allowed false
+access_control
+  required_role "AugmentedCitizen"
+  ai_chat_permissions "propose-only"
+  min_knowledge 0.7
+governance
+  oligarchy_prevention "no_stake_voting"
+  auditability "full, ALN-logged"
+eco_alignment
+  avg_energynj_per_access 45.0
+  energy_reduction_vs_baseline_pct 30.0
+  proofhex 0xGUARD1A2B3C4D5E6F
+end
