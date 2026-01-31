@@ -1,0 +1,23 @@
+name: Daily BCI
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 */4 * *"
+
+jobs:
+  daily-bci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - name: Build bci-guards
+        run: cargo build -p bci-guards --all-features
+      - name: Test bci-guards
+        run: cargo test -p bci-guards --all-features
+      - name: Validate BCI manifests
+        run: cargo test -p aln-core --test manifest_validation_bci
