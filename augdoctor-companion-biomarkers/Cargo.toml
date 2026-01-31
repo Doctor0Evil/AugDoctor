@@ -1,0 +1,18 @@
+[package]
+name = "augdoctor-companion-biomarkers"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Companion-biomarker and autonomy-governor core for AugDoctor / NeuroPC under Eibon governance."
+repository = "https://github.com/Doctor0Evil/AugDoctor"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+chrono = { version = "0.4", features = ["clock"] }
+thiserror = "1.0"
+
+# These are existing core crates in your stack; keep paths consistent with your workspace.
+biophysical_blockchain = { path = "../biophysical-blockchain" }
+augdoctor_policies = { path = "../augdoctor-policies" }
+neuralroping = { path = "../neural-roping" }
