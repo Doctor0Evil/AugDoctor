@@ -1,0 +1,23 @@
+name: Daily Neuromorphic
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 */4 * *"
+
+jobs:
+  daily-neuro:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - name: Build neuromorphic-guards
+        run: cargo build -p neuromorphic-guards --all-features
+      - name: Test neuromorphic-guards
+        run: cargo test -p neuromorphic-guards --all-features
+      - name: Validate neuro manifests
+        run: cargo test -p aln-core --test manifest_validation_neuro
