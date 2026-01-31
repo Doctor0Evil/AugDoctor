@@ -1,0 +1,13 @@
+[package]
+name = "smartcity-swarm-guards"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+aln-core = { path = "../aln-core" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+rand = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+prometheus = { workspace = true }
