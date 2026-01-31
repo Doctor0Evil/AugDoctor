@@ -1,0 +1,22 @@
+version 1.0
+schema augdoctor.companion.biomarker.feature
+hostid bostrom18sd2ujv24ual9c9pshtxys6j8knh6xaead9ye7
+plane neuromorph.softwareonly
+
+feature
+  sessionid     "sess-2026-01-31T0140Z"
+  environmentid "neuro-pc-reality-os"
+  planelabel    "neuromorph.softwareonly"
+  stress_level        0.32
+  fatigue_level       0.18
+  cognitive_load      0.41
+  eco_energy_nj       0.27
+  reward_score        0.86
+  safety_margin       0.91
+  band_alpha_power    11.7
+  band_beta_power      9.2
+  band_gamma_power     4.8
+  error_rate           0.00
+  crash_flag           false
+  lifeforce_scalar     0.78
+  proofhex 0xCBM-FEAT-01
