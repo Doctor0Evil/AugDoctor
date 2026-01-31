@@ -1,0 +1,52 @@
+date: 2026-01-30
+domain: bci
+evidence_bundle:
+  tags:
+    - id: Cmro2
+      name: Cmro2
+      value: 1.0
+      lower_bound: 0.5
+      upper_bound: 1.5
+    - id: Hrv
+      name: HRV
+      value: 0.8
+      lower_bound: 0.0
+      upper_bound: 1.0
+    - id: FatigueIndex
+      name: Fatigue
+      value: 0.4
+      lower_bound: 0.0
+      upper_bound: 1.0
+    - id: StressIndex
+      name: Stress
+      value: 0.3
+      lower_bound: 0.0
+      upper_bound: 1.0
+    - id: SleepDebt
+      name: SleepDebt
+      value: 0.2
+      lower_bound: 0.0
+      upper_bound: 1.0
+envelopes:
+  cognitive_load_v2:
+    theta_alpha_ratio_max: 2.0
+    error_rate_max: 0.14
+    microbreak_interval_min: 26.0
+  muscle_safety_v2:
+    intent_throughput_max: 3.0
+    fatigue_index_max: 0.4
+clauses:
+  - id: NoCorticalActuation
+    metric: bci_actuation_mode
+  - id: CognitiveRestWindow
+    metric: microbreak_interval
+may_this_run:
+  proof_artifact_hashes: ["0x8c2f1d97"]
+  test_harness_hash: "bci-guards-tests-v1"
+  required_dids:
+    - "did:bostrom:bostrom18sd2ujv24ual9c9pshtxys6j8knh6xaead9ye7"
+spec_identifiers:
+  - "envelope:bci:cognitive_load_v2"
+  - "envelope:bci:muscle_safety_v2"
+  - "clause:NoCorticalActuation"
+  - "clause:CognitiveRestWindow"
