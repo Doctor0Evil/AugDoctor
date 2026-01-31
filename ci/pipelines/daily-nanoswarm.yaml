@@ -1,0 +1,23 @@
+name: Daily Nanoswarm
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 */4 * *"
+
+jobs:
+  daily-nanoswarm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - name: Build nanoswarm-guards
+        run: cargo build -p nanoswarm-guards --all-features
+      - name: Test nanoswarm-guards
+        run: cargo test -p nanoswarm-guards --all-features
+      - name: Validate nanoswarm manifests
+        run: cargo test -p aln-core --test manifest_validation_nanoswarm
