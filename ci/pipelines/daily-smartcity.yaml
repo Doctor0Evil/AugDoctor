@@ -1,0 +1,23 @@
+name: Daily Smartcity
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 */4 * *"
+
+jobs:
+  daily-smartcity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          override: true
+      - name: Build smartcity-swarm-guards + prometheus-bridge
+        run: cargo build -p smartcity-swarm-guards -p prometheus-bridge --all-features
+      - name: Test smartcity-swarm-guards
+        run: cargo test -p smartcity-swarm-guards --all-features
+      - name: Validate smartcity manifests
+        run: cargo test -p aln-core --test manifest_validation_smartcity
