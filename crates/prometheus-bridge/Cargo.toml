@@ -1,0 +1,11 @@
+[package]
+name = "prometheus-bridge"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+prometheus = { workspace = true }
+aln-core = { path = "../aln-core" }
+smartcity-swarm-guards = { path = "../smartcity-swarm-guards" }
+serde = { workspace = true }
+anyhow = { workspace = true }
