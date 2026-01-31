@@ -1,0 +1,25 @@
+{
+  "profile": "biospectre.augmented_citizen.v1",
+  "host_role": "OrganicallyIntegratedAugmentedCitizen",
+  "flags": {
+    "augmentation_continuity_right": true,
+    "non_exclusion_basic_services": true,
+    "neurocoercion_shield": true,
+    "inner_state_non_scoring": true
+  },
+  "training_mode": {
+    "type": "progressive_exposure_rehabilitation",
+    "reversible": true,
+    "recovery_bounded": true,
+    "self_consent_required": true,
+    "self_only_effects": true
+  },
+  "forbidden_actions": [
+    "pathologize_or_disable_due_to_intensity_or_novelty",
+    "seize_augmentations_for_non_safety_reasons"
+  ],
+  "constraints": {
+    "law_compliant": true,
+    "no_harm_to_others": true
+  }
+}
