@@ -1,0 +1,74 @@
+{
+  "$id": "https://augdoctor.org/schema/autonomy-trace.v1.json",
+  "title": "AutonomyTraceAttributesV1",
+  "type": "object",
+  "description": "Cross-language autonomy trace for CompanionAutonomyGovernor.",
+  "properties": {
+    "schemaversion": {
+      "type": "string",
+      "const": "autonomy-trace.v1"
+    },
+    "host_id": { "type": "string" },
+    "session_id": { "type": "string" },
+    "environment_id": { "type": "string" },
+    "plane": {
+      "type": "string",
+      "enum": [
+        "chat.only",
+        "neuromorph.softwareonly",
+        "bci.hci.eeg"
+      ]
+    },
+
+    "stress": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+    "fatigue": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+    "reward": { "type": "number", "minimum": -1.0, "maximum": 1.0 },
+    "safety": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+    "lifeforce_scalar": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+    "eco_energy_nj": { "type": "number", "minimum": 0.0 },
+    "risk": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+
+    "actions_last_minute": { "type": "integer", "minimum": 0 },
+    "identity_drift_today": { "type": "number", "minimum": 0.0 },
+
+    "decision_autonomy_level": {
+      "type": "number",
+      "minimum": 0.0,
+      "maximum": 1.0
+    },
+    "decision_shot_level_label": {
+      "type": "string",
+      "enum": ["ZeroShot", "FewShot", "Hybrid"]
+    },
+
+    "constraint": {
+      "type": "object",
+      "properties": {
+        "highest_risk_score": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "worst_lifeforce_scalar": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+      },
+      "required": ["highest_risk_score", "worst_lifeforce_scalar"],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schemaversion",
+    "host_id",
+    "session_id",
+    "environment_id",
+    "plane",
+    "stress",
+    "fatigue",
+    "reward",
+    "safety",
+    "lifeforce_scalar",
+    "eco_energy_nj",
+    "risk",
+    "actions_last_minute",
+    "identity_drift_today",
+    "decision_autonomy_level",
+    "decision_shot_level_label",
+    "constraint"
+  ],
+  "additionalProperties": false
+}
