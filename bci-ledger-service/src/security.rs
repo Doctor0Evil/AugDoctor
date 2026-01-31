@@ -18,23 +18,22 @@ pub enum CivicClass {
     Disallowed,
 }
 
-/// Parsed authorization envelope from HTTP / WASM caller.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct AuthEnvelope {
-    pub issuer_did: String,
-    pub subject_role: String,
-    pub network_tier: String,
-    pub knowledge_factor: f32,
-    pub tags: Vec<String>,   // e.g. ["civic-duty", "teaching", "disaster-response"]
+    pub issuerdid: String,
+    pub subjectrole: String,
+    pub networktier: String,
+    pub knowledgefactor: f32,
+    pub tags: Vec<String>,
 }
 
 impl AuthEnvelope {
     pub fn to_identity_header(&self) -> IdentityHeader {
         IdentityHeader {
-            issuer_did: self.issuer_did.clone(),
-            subject_role: self.subject_role.clone(),
-            network_tier: self.network_tier.clone(),
-            knowledge_factor: self.knowledge_factor,
+            issuerdid: self.issuerdid.clone(),
+            subjectrole: self.subjectrole.clone(),
+            networktier: self.networktier.clone(),
+            knowledgefactor: self.knowledgefactor,
         }
     }
 }
@@ -88,3 +87,4 @@ pub fn civic_reward_multiplier(class: CivicClass) -> f64 {
         CivicClass::Disallowed => 0.0,
     }
 }
+
