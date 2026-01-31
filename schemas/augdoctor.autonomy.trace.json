@@ -1,0 +1,41 @@
+{
+  "$id": "https://augdoctor.org/schema/autonomy-trace.v1.json",
+  "title": "AutonomyTraceV1",
+  "type": "object",
+  "description": "Non-identity autonomy + biomarker summary for neural-rope assisted learning.",
+  "properties": {
+    "session_id": { "type": "string", "description": "Ephemeral session identifier; no PII." },
+    "planelabel": { "type": "string", "description": "Environment plane label (neuromorph, bci, eco, etc.)." },
+    "environment_id": { "type": "string", "description": "Abstract environment tag, not a DID." },
+    "autonomy_level": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+    "shot_level_label": { "type": "string", "enum": ["ZeroShot", "FewShot", "Hybrid"] },
+    "may_act_without_confirm": { "type": "boolean" },
+    "primary_reason": { "type": "string" },
+    "avg_stress": { "type": "number" },
+    "avg_fatigue": { "type": "number" },
+    "avg_cognitive_load": { "type": "number" },
+    "avg_eco_energy_nj": { "type": "number" },
+    "avg_reward": { "type": "number" },
+    "avg_safety_margin": { "type": "number" },
+    "worst_lifeforce_scalar": { "type": "number" },
+    "highest_risk_score": { "type": "number" }
+  },
+  "required": [
+    "session_id",
+    "planelabel",
+    "environment_id",
+    "autonomy_level",
+    "shot_level_label",
+    "may_act_without_confirm",
+    "primary_reason",
+    "avg_stress",
+    "avg_fatigue",
+    "avg_cognitive_load",
+    "avg_eco_energy_nj",
+    "avg_reward",
+    "avg_safety_margin",
+    "worst_lifeforce_scalar",
+    "highest_risk_score"
+  ],
+  "additionalProperties": false
+}
