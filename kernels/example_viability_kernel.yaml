@@ -1,0 +1,32 @@
+state_dim: 8
+A:
+  - [1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # intensity <= 0.7
+  - [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # duty_cycle <= 0.5
+  - [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0]  # cumulative_load <= 0.6
+  - [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0]  # implant_power <= 0.4
+  - [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]  # neuromod_amplitude <= 0.5
+  - [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0]  # cognitive_load <= 0.7
+  - [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]  # legal_complexity <= 0.6
+  - [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -1.0] # lifeforce >= 0.4
+b:
+  - 0.7
+  - 0.5
+  - 0.6
+  - 0.4
+  - 0.5
+  - 0.7
+  - 0.6
+  - -0.4
+labels:
+  - intensity
+  - duty_cycle
+  - cumulative_load
+  - implant_power
+  - neuromod_amplitude
+  - cognitive_load
+  - legal_complexity
+  - lifeforce
+meta:
+  mode: Baseline
+  jurisdiction: Phoenix_AZ_US
+  description: Conservative Baseline kernel for initial testing.
