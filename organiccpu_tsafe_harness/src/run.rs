@@ -1,4 +1,3 @@
-// Destination-Path: organiccpu_tsafe_harness/src/run.rs
 use crate::kernel_spec::ViabilityKernelSpec;
 use serde_yaml::from_reader;
 use std::fs::File;
