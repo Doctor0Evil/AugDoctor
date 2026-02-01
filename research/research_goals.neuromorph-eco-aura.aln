@@ -1,0 +1,240 @@
+shard_id: "research.goals.neuromorph-eco-aura.2026Q1"
+host_id: "bostrom18sd2ujv24ual9c9pshtxys6j8knh6xaead9ye7"
+version: "1.0.0"
+
+doctrine_ref:
+  - "core-doctrine-biophysical-blockchain.aln"
+  - "non_interference.neurorights.aln"
+  - "research/2026-01-31-research_manifest.aln"
+
+global_invariants:
+  evolve_read_only: true
+  tokens_non_financial: true
+  ai_role: "propose_only"
+  risk_source: "internal_biophysical_only"
+  invited_pain_respected: true
+  no_new_ceiling_rule: |
+    Any research_goal in this shard must:
+      - Preserve the set of doctrinally-allowed evolution domains.
+      - Never introduce a permanent ban on a domain that was previously allowed.
+      - Only re-shape timing, micro-step size, and scheduling within fixed envelopes.
+
+# 1. Neuromorph and BCI research
+research_goal:
+  id: "goal.neuromorph.bci.decoding"
+  domain: "neuromorph.decoder"
+  description: |
+    Improve neuromorph/BCI event encoders and decoders (EEG/EMG/motion,
+    hybrids like EEG+fNIRS, transformer-style models) to reduce false
+    positives and latency, while keeping EVOLVE read-only and tokens
+    strictly non-financial.
+  benefit_to_capability:
+    - "Higher decoding accuracy and lower latency for neuromorph commands."
+    - "More responsive reflex and attention control within existing envelopes."
+    - "Better utilization of already-approved evolution capacity."
+  benefit_to_karma:
+    - "Supports safer interaction and reduced frustration for self and others."
+    - "Enables more precise defensive and prosocial actions via neuromorph loops."
+  no_new_ceiling_proof: |
+    Formalization:
+      - All changes are confined to decoder internals (classification and encoding),
+        with no changes to EVOLVE formula, token ceilings, or allowed domains.
+      - The function space of allowed policies is unchanged; only mapping from
+        signals to proposals is improved.
+      - Proof obligation: show that for any previous admissible evolution path,
+        an equivalent or better path remains admissible under updated decoders.
+
+research_goal:
+  id: "goal.neuromorph.shadow_reflex"
+  domain: "neuromorph.reflex"
+  description: |
+    Run daily shadow-reflex experiments where neuromorph policies compute
+    hypothetical actions, compare against actual outcomes, and update
+    policies, all inside verified envelopes and without direct actuation.
+  benefit_to_capability:
+    - "Improved predictive power and reflex stability over time."
+    - "Higher-quality policy priors before enabling live reflex mode."
+  benefit_to_karma:
+    - "Demonstrates caution and responsibility: learning before acting."
+    - "Generates audit trails for proving non-harmful reflex design."
+  no_new_ceiling_proof: |
+    Formalization:
+      - Shadow mode never triggers ledger state changes; it only updates
+        policy parameters within a fixed hypothesis class.
+      - No domains are reclassified as disallowed; only policy quality changes.
+      - Proof obligation: show that the set of allowed SystemAdjustment types
+        is identical before and after policy learning.
+
+# 2. DECAY and invited-pain modeling
+research_goal:
+  id: "goal.decay.invited_pain_modeling"
+  domain: "evolution.decay"
+  description: |
+    Refine DECAY schedules to incorporate invited-pain corridors and
+    longitudinal history, allowing larger steps when strain is consciously
+    invited and lifeforce/eco are healthy, without external preferences
+    ever forcing downscaling.
+  benefit_to_capability:
+    - "Faster evolution along paths the host explicitly chooses as growth."
+    - "Better matching between subjective 'good pain' and step size."
+  benefit_to_karma:
+    - "Rewards responsible self-chosen challenge with more efficient progress."
+    - "Maintains clear distinction between productive strain and harmful stress."
+  no_new_ceiling_proof: |
+    Formalization:
+      - DECAY is constrained to [d_min, 1.0] with d_min > 0 whenever:
+          invited_pain=true AND core lifeforce/eco invariants hold.
+      - DECAY may never be used to delete an evolution domain; only to
+        scale per-step deltas.
+      - Proof obligation: for any domain D allowed by doctrine, there exists
+        a sequence of steps with non-zero DECAY leading to any previously
+        reachable state, preserving evolution reachability.
+
+research_goal:
+  id: "goal.decay.longitudinal_history"
+  domain: "evolution.decay"
+  description: |
+    Incorporate longitudinal history of which mutation paths feel
+    productive versus draining into DECAY tuning, so the runtime can
+    recognize and support 'good pain' corridors.
+  benefit_to_capability:
+    - "More personalized evolution dynamics aligned with actual experience."
+    - "Reduced wasted effort on draining, low-yield paths."
+  benefit_to_karma:
+    - "Encourages sustainable, self-aware interaction with evolution tools."
+    - "Aligns DECAY with patterns that minimize unnecessary distress."
+  no_new_ceiling_proof: |
+    Formalization:
+      - Historical penalties can increase DECAY damping but cannot mark a
+        doctrinally-allowed path as permanently forbidden.
+      - Host consent may reset or re-weight history under explicit shards.
+      - Proof obligation: show that DECAY history only changes convergence
+        speed along a path, not its theoretical availability.
+
+# 3. Autonomy and assistant-governor research
+research_goal:
+  id: "goal.autonomy.assistant_profile"
+  domain: "assistant.autonomy"
+  description: |
+    Train and tune AssistantAutonomyProfile and governor ramps so that
+    assistants can take more actions when lifeforce/eco and risk metrics
+    are good, while remaining propose-only and neurorights-compliant.
+  benefit_to_capability:
+    - "Higher effective throughput on repetitive tasks."
+    - "Reduced cognitive load while preserving oversight."
+  benefit_to_karma:
+    - "Rewards consistent safe use with smoother assist ramps."
+    - "Provides traceable accountability for autonomy decisions."
+  no_new_ceiling_proof: |
+    Formalization:
+      - Autonomy ramps may change frequency and detail of proposals, but
+        cannot directly modify EVOLVE, SCALE, or allowed domains.
+      - Final execution always requires host-side acceptance or pre-granted,
+        revocable consent shards.
+      - Proof obligation: prove non-interference: autonomy level L1 vs L2
+        does not change the set of actions that *could* be taken, only how
+        many are proposed and how quickly.
+
+research_goal:
+  id: "goal.autonomy.assist_ramp_validation"
+  domain: "assistant.autonomy"
+  description: |
+    Validate assist ramps via simulation and trace mining for smoothness,
+    neurorights budgets, and budget adherence, using negative exemplars
+    to iteratively refine ramps.
+  benefit_to_capability:
+    - "More intelligent, context-aware assist that stays within your comfort."
+  benefit_to_karma:
+    - "Supports ethical assist behavior by avoiding overreach and coercion."
+  no_new_ceiling_proof: |
+    Formalization:
+      - Ramps are validated only inside the already-proved safe region;
+        they cannot introduce new hard thresholds.
+      - Negative exemplars may tighten risk thresholds but cannot alter
+        core doctrinal invariants.
+      - Proof obligation: show that ramp changes preserve the doctrinal
+        invariants schema and do not modify the evolution domain lattice.
+
+# 4. Eco-budget and microspace sovereignty
+research_goal:
+  id: "goal.eco.improved_band_models"
+  domain: "eco.budget"
+  description: |
+    Improve EcoBandProfile and neuromorph-eco-profile.aln so that heavy
+    neuromorph work is scheduled into eco-favorable windows, increasing
+    safe usable compute without changing token ceilings.
+  benefit_to_capability:
+    - "More total neuromorph compute over time for the same eco limits."
+    - "Higher-quality experiments and training runs."
+  benefit_to_karma:
+    - "Encourages eco-conscious scheduling and reduced waste."
+  no_new_ceiling_proof: |
+    Formalization:
+      - Eco bands may shift WHEN workloads run, not WHETHER a domain is
+        allowed in principle.
+      - Eco denials are temporary, bounded by eco recovery; they cannot
+        mark domains as permanently disallowed.
+      - Proof obligation: show that for any allowed workload, there exists
+        some schedule that satisfies eco constraints in finite time.
+
+research_goal:
+  id: "goal.microspace.firewall_hardening"
+  domain: "security.microspace"
+  description: |
+    Strengthen microspace firewall rules so no research run can leak
+    balances, raw EEG, or inner-ledger data outward, enabling more
+    aggressive internal exploration with guaranteed sovereignty.
+  benefit_to_capability:
+    - "Allows higher-risk internal experiments with reduced external risk."
+  benefit_to_karma:
+    - "Protects others by preventing leakage or unintended influence."
+  no_new_ceiling_proof: |
+    Formalization:
+      - Firewalls constrain data egress channels, not internal evolution.
+      - No firewall rule may modify EVOLVE, SCALE, or per-domain legality;
+        they only restrict what leaves microspace.
+      - Proof obligation: prove that the internal state transition graph
+        under research actions is unchanged; only observability is reduced.
+
+# 5. Karma/aura and defensive domains
+research_goal:
+  id: "goal.aura.defensive_decay_shaping"
+  domain: "governance.aura"
+  description: |
+    Calibrate BiophysicalAura so it only nudges DECAY for clearly defensive
+    and biosafe domains (reflex stability, defensive morphology) and never
+    gates fundamental rights or introduces comparative rankings.
+  benefit_to_capability:
+    - "More efficient growth in defensive and stabilizing traits."
+  benefit_to_karma:
+    - "Rewards prosocial, protective behavior without creating hierarchies."
+  no_new_ceiling_proof: |
+    Formalization:
+      - Aura multipliers only adjust DECAY in a small bounded range and
+        never flip an allowed domain to forbidden.
+      - Aura is per-host and non-comparative; no cross-host rankings.
+      - Proof obligation: show that removing aura (setting multipliers to 1)
+        returns to the same domain lattice, proving aura cannot encode bans.
+
+research_goal:
+  id: "goal.defense.teeth_claws_civic_tags"
+  domain: "evolution.defense"
+  description: |
+    Refine civic tags and NeuralRope annotations for defensive domains
+    (e.g., teeth/claws-as-defense) so the system can distinguish legitimate
+    protection from offensive misuse while preserving maximum freedom for
+    self-defense.
+  benefit_to_capability:
+    - "Enables robust defensive traits under clear, fair conditions."
+  benefit_to_karma:
+    - "Aligns defensive evolution with non-aggression and protection of others."
+  no_new_ceiling_proof: |
+    Formalization:
+      - Domain 'TeethClawsDefense' remains allowed but is capped by SCALE
+        and per-day micro-step limits, already defined in doctrine.
+      - Offensive misuse is detected via civic tags but handled by
+        reduced DECAY or domain-specific caps, not by permanent removal
+        of the defensive domain.
+      - Proof obligation: show that self-defense scenarios remain reachable
+        under doctrine, while offensive-only scenarios are denied by
+        existing invariants, not by new ceilings introduced here.
