@@ -1,0 +1,50 @@
+version 1.0
+schema organichain.neuropc.perturnvalidation
+hostid bostrom18sd2ujv24ual9c9pshtxys6j8knh6xaead9ye7
+turn-utc 2026-01-31T18:46:00Z
+
+querymeta
+  queryid evolution-turn-2026-01-31-07
+  aichatplatform Perplexity-GPT-5.1
+  intentid INTENT_research-deep-biophysical-domain
+
+actions
+  - id action.intent-detection
+    result Passed
+    messages ["intent-detection invariants satisfied"]
+
+  - id action.turn-validation
+    result Passed
+    messages ["proposal satisfied all biophysical constraints"]
+
+  - id action.evolution-interval
+    result Passed
+    messages ["evolution interval invariants satisfied"]
+
+  - id action.eco-and-evolve-budgets
+    result Passed
+    messages ["eco and evolution budgets respected"]
+
+  - id action.reversible-actuation
+    result Skipped
+    messages ["proposal contains non-reversible patterns; handled by irreversible-turn validator"]
+
+  - id action.irreversible-turn
+    result Passed
+    messages ["irreversible turn carries valid consent token"]
+
+  - id action.deep-domain-excavation
+    result Passed
+    messages ["deep-domain excavation delegated to governed_select_deep_epochs and rights profile"]
+
+  - id action.traceability
+    result Passed
+    messages ["qpudatashard for deep-object excavation was written"]
+
+  - id action.meta-governance
+    result Passed
+    messages ["AugmentationRight profile is RightsSafe","DeepDomainRightsProfile is RightsSafe"]
+
+  - id action.outer-attestation
+    result Skipped
+    messages ["no outer attestation for this turn"]
