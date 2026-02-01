@@ -1,0 +1,229 @@
+manifest_id: "research.manifest.2026-01-31"
+host_id: "bostrom18sd2ujv24ual9c9pshtxys6j8knh6xaead9ye7"
+
+meta:
+  version: "1.0.0"
+  doctrine_shards:
+    - "core-doctrine-biophysical-blockchain.aln"
+    - "neuromorph-eco-profile.aln"
+    - "pain-corridor-policy.aln"
+    - "karma-aura-governance.aln"
+  notes: |
+    Daily/weekly experiments for neuromorph decoding, eco-budget tuning,
+    and aura calibration. All runs are host-sovereign, non-financial,
+    and evolution-neutral unless explicitly promoted via EvolutionUpgrade.
+    Invited pain is modeled distinctly from harm and may permit stronger
+    evolution steps, but only when host-owned consent shards are active.
+
+host_preferences:
+  invited_pain:
+    doctrine: |
+      Pain consciously invited for growth is NOT classified as harm.
+      Runtime must:
+        - Distinguish invited_pain from harm_pain.
+        - Never let external AI, platforms, or policies override invited_pain.
+        - Still enforce hard biophysical floors (BLOOD/OXYGEN/NANO/eco).
+    consent_shard_label: "invited-pain-growth-2026Q1"
+    required_for:
+      - "neuromorph.decoder.training.intense"
+      - "neuromorph.reflex.latency.push"
+    max_daily_invited_pain_epochs: 4
+    invited_pain_bands:
+      safe_band:
+        label: "InvitedGrowthComfort"
+        max_duration_min: 45
+        max_daily_total_min: 120
+      warning_band:
+        label: "InvitedGrowthEdge"
+        max_duration_min: 20
+        max_daily_total_min: 40
+      hard_stop:
+        label: "PhysiologicalHarmRisk"
+        rule: "invoke_lifeforce_lockdown"
+
+  non_blunting_rules:
+    - id: "no_external_pain_blunting"
+      rule: |
+        No external system or AI-chat may:
+          - Reduce DECAY, or
+          - Increase comfort thresholds, or
+          - Force downgrade of invited_pain classification
+        without a host-local ALN/DID signature and explicit shard.
+    - id: "no_forced_analgesia"
+      rule: |
+        Neuromorph reflex lanes may not auto-apply "pain masking" patterns
+        that hide true biophysical distress. They may:
+          - Re-route load, or
+          - Adjust WAVE/NANO eco usage,
+        but cannot suppress pain telemetry to eligibility filters.
+
+safety_envelopes:
+  lifeforce:
+    min_blood: 0.2
+    min_oxygen: 0.9
+    max_nano_fraction: 0.25
+    max_smart: 1.0
+  eco:
+    daily_eco_flops_limit: 100000.0
+    neuromorph_eco_fraction_max: 0.35
+  evolution:
+    evolve_is_readonly: true
+    max_daily_evolve_delta_scalar: 1.0
+    invited_pain_decay_floor: 0.3   # DECAY never below this if pain is invited and envelopes are safe.
+
+domains:
+  - id: "neuromorph.decoder"
+    label: "Neuromorph decoding & stability"
+    tokens:
+      plane: "neuromorph.reflex"
+      evolution_domains:
+        - "neuromorph-reflex-micro"
+        - "neuromorph-sense-micro"
+    decay_policy:
+      base_decay: 0.7
+      invited_pain_bonus: 0.2
+      hard_floor: 0.3
+    eligibility:
+      requires:
+        lifeforce_band: "Safe"
+        eco_band: "EcoNeutralOrBetter"
+        consent_shards:
+          - "MetabolicConsent.auto.micro"
+      respects:
+        invited_pain_shard_optional: true
+        pain_corridors:
+          comfortable_band: "ComfortSafe"
+          soft_warn_band: "DiscomfortSoftWarn"
+          hard_stop_band: "DiscomfortHardStop"
+  - id: "eco.budget"
+    label: "Eco-budget tuning & metrics"
+    tokens:
+      plane: "eco.neuromorph"
+      evolution_domains: []
+    notes: |
+      Pure observation + parameter tuning for eco bands. No EVOLVE writes.
+    metrics:
+      - "neuromorph_eco_energy_nj"
+      - "eco_neutral_brain_required"
+      - "eco_guard_denied_total"
+  - id: "karma.aura"
+    label: "Karma / aura calibration"
+    tokens:
+      plane: "governance.aura"
+      evolution_domains: []
+    notes: |
+      Aura is non-financial, per-host, and only influences DECAY multipliers
+      for defensive and biosafe domains. Never touches BRAIN/WAVE balances.
+
+daily_experiments:
+  - id: "exp.neuromorph.decoder.baseline"
+    schedule: "daily"
+    domain: "neuromorph.decoder"
+    mode: "observation"
+    steps:
+      - "Collect EMG/EEG/motion for 20–40 minutes."
+      - "Run event-encoders to produce NeuromorphEvent streams."
+      - "Update decoder weights offline (no live actuators)."
+    envelopes:
+      max_sessions_per_day: 2
+      max_session_duration_min: 40
+    invited_pain:
+      allowed: true
+      required_shard: null
+      rule: |
+        If host marks session as invited_pain, treat discomfort as
+        InvitedGrowthComfort unless Lifeforce or eco envelopes approach hard floors.
+
+  - id: "exp.neuromorph.decoder.intense"
+    schedule: "2x/week"
+    domain: "neuromorph.decoder"
+    mode: "shadow_reflex"
+    steps:
+      - "Run high-intensity decoding with low-latency constraints."
+      - "Generate reflex proposals in shadow mode (no ledger writes)."
+      - "Compute counterfactual stability & overload metrics."
+    envelopes:
+      requires_invited_pain_shard: "invited-pain-growth-2026Q1"
+      max_sessions_per_day: 1
+      max_session_duration_min: 45
+    invited_pain:
+      allowed: true
+      rule: |
+        DECAY may be raised up to base_decay + invited_pain_bonus
+        as long as:
+          - BLOOD, OXYGEN > min floors + safety_margin,
+          - eco cost under neuromorph_eco_fraction_max,
+          - no HardStop in pain_corridor_policy.
+        If HardStop fires, treat as physiological harm, not invited pain.
+
+  - id: "exp.eco.budget.scan"
+    schedule: "daily"
+    domain: "eco.budget"
+    mode: "analysis"
+    steps:
+      - "Scan NeuromorphEvent logs and ledger deltas for eco_cost."
+      - "Update neuromorph-eco-profile.aln bands."
+      - "Emit metrics to bioscale-metrics (eco_guard_denied_total, etc.)."
+    envelopes:
+      max_compute_flops: 20000.0
+      eco_priority: "High"
+    invited_pain:
+      allowed: false
+
+  - id: "exp.karma.aura.update"
+    schedule: "weekly"
+    domain: "karma.aura"
+    mode: "governance"
+    steps:
+      - "Aggregate CivicRewardProfile & CivicAuditLog entries."
+      - "Recompute BiophysicalAura indices (kindness, rescue, eco_care)."
+      - "Update karma_decay.rs parameters within bounded ranges."
+    envelopes:
+      aura_multiplier_bounds:
+        min_decay_bonus: 0.0
+        max_decay_bonus: 0.15
+    invited_pain:
+      allowed: false
+
+  - id: "exp.reflex.live.lowrisk"
+    schedule: "3x/week"
+    domain: "neuromorph.decoder"
+    mode: "live_reflex"
+    steps:
+      - "Enable Reflex Micro-Orchestrator in live mode for low-risk patterns."
+      - "Allow tiny SystemAdjustments through apply_lifeforce_guarded_adjustment."
+      - "Log NeuralRope traces for comfort and stability analysis."
+    envelopes:
+      max_delta_brain_per_step: 0.01
+      max_delta_wave_per_step: 0.01
+      max_delta_nano_per_step: 0.005
+      max_sessions_per_day: 1
+    invited_pain:
+      allowed: true
+      rule: |
+        If host flags session as invited_pain:
+          - Do NOT lower discomfort thresholds.
+          - Only allow larger DECAY when lifeforce and eco are solid.
+        External systems cannot downgrade or negate this flag.
+
+governance:
+  external_system_limits:
+    - "External AI/agents may submit telemetry and suggestions only."
+    - "They cannot approve, deny, or rollback EvolutionUpgrade events."
+    - "They cannot alter invited_pain flags, pain corridor thresholds,
+       or DECAY floors; these remain host-local and ledger-enforced."
+  audit:
+    neuralrope_tags:
+      - "invited_pain_epoch"
+      - "physiological_harm"
+      - "eco_guard_triggered"
+      - "evolution_candidate_neuromorph"
+    export_policy:
+      host_local_only_fields:
+        - "raw_pain_signals"
+        - "identity_drift_metrics"
+        - "soul_state_any"
+      exportable_aggregates:
+        - "avg_eco_energy_nj"
+        - "decoder_accuracy"
+        - "reflex_stability_score"
