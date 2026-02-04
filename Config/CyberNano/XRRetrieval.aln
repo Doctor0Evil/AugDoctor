@@ -1,0 +1,46 @@
+[policy.no_normal_reversal]
+domain   = evolution
+rule     = "reversal_allowed == emergency_only"
+evidence = "7f3a9c21"
+
+[metric.xr_latency]
+domain   = "xr_retrieval"
+module   = "UCN_ConnectivityGuard"
+op       = "<="
+threshold= 20
+unit     = "ms"
+
+[metric.xr_energy_drain]
+domain   = "host"
+module   = "UCN_EnergyManager"
+op       = "<="
+threshold= 0.5
+unit     = "fraction_of_host_budget"
+
+[metric.xr_snr_min]
+domain   = "bci"
+module   = "UCN_SnrGate"
+op       = ">="
+threshold= 12.0
+unit     = "dB"
+
+[metric.xr_risk_max]
+domain   = "xr_retrieval"
+module   = "UCN_RiskMonitor"
+op       = "<="
+threshold= 0.7
+unit     = "risk_score"
+
+[metric.xr_density_max]
+domain   = "nanoswarm"
+module   = "UCN_DensityGuard"
+op       = "<="
+threshold= 1.0
+unit     = "rel_density"
+
+[metric.xr_coverage_min]
+domain   = "nanoswarm"
+module   = "UCN_CoverageMonitor"
+op       = ">="
+threshold= 0.85
+unit     = "coverage_fraction"
