@@ -1,0 +1,10 @@
+[workspace]
+members = [
+  "crates/xrlab_access",
+  "crates/cyber_did_core",
+  "crates/session_binding",
+  "crates/cybernetic_upgrade_store",
+  "crates/xr_chat_router",
+  "crates/aln_macros",
+]
+resolver = "2"
