@@ -1,4 +1,7 @@
 //! Corridor-checked mutation trait that wraps the inner sealed LedgerMutator.
+//!
+//! This forces MORPH / POWER / ALN / consent checks plus SCALE and
+//! daily-turn constraints before any inner-ledger mutation.
 
 use crate::gates::{CorridorContext, CorridorError, CorridorGate};
 use crate::sealed::inner::Sealed;
@@ -16,11 +19,15 @@ use biophysical_blockchain::consensus::LedgerEvent;
 pub trait CorridorCheckedMutation: Sealed {
     /// Apply a SystemAdjustment only if the corridor gates pass, then
     /// delegate to the sealed inner-ledger mutation.
+    ///
+    /// - `scale_budget`: per-turn SCALE-derived mutation span for this host.
+    /// - `max_daily_turns`: compiled+shard-clamped daily evolution turn limit.[file:42]
     fn apply_corridor_checked(
         &mut self,
         corridor: &CorridorContext,
         consent_verifier: &dyn ConsentVerifier,
-        required_knowledge_factor: f32,
+        scale_budget: f32,
+        max_daily_turns: u8,
         adjustment: SystemAdjustment,
         timestamputc: &str,
         lifeforce_series: LifeforceBandSeries,
@@ -57,22 +64,31 @@ impl CorridorCheckedMutation for InnerLedger {
         &mut self,
         corridor: &CorridorContext,
         consent_verifier: &dyn ConsentVerifier,
-        required_knowledge_factor: f32,
+        scale_budget: f32,
+        max_daily_turns: u8,
         adjustment: SystemAdjustment,
         timestamputc: &str,
         lifeforce_series: LifeforceBandSeries,
         eco_profile: EcoBandProfile,
         wave_curve: SafetyCurveWave,
     ) -> Result<LedgerEvent, CorridorMutationError> {
-        // 1. MORPH / POWER / ALN / consent gates.
-        corridor.check(consent_verifier).map_err(CorridorMutationError::from)?;
+        // 1. MORPH / POWER / ALN / consent / knowledge-factor corridor gates.
+        corridor
+            .check(consent_verifier)
+            .map_err(CorridorMutationError::from)?;
 
-        // 2. Inner-ledger identity + lifeforce/eco/WAVE invariants via sealed LedgerMutator.
+        // 2. Inner-ledger identity + lifeforce/eco/WAVE invariants via sealed LedgerMutator,
+        //    including SCALE and daily-turn limits enforced inside system_apply_guarded.[file:42][file:47]
         let id_header: IdentityHeader = corridor.identity.clone();
+
+        // SCALE and max_daily_turns are host-local, non-financial governors derived
+        // from BRAIN, NANO, and ALN evolution-budget shards; they are consumed by
+        // the inner ledger when evaluating evolution adjustments.[file:42][file:47]
         let event = <InnerLedger as LedgerMutator>::system_apply_guarded(
             self,
             id_header,
-            required_knowledge_factor,
+            scale_budget,
+            max_daily_turns,
             adjustment,
             timestamputc,
             lifeforce_series,
