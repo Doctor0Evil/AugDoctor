@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 pub struct HostRightsTravelUsProfile {
     pub host_id: String,
     pub profile_id: String,
+
+    // Sovereignty / non-financial
     pub host_bound: bool,
     pub defi_bridge: bool,
     pub stake_weighted: bool,
@@ -13,11 +15,13 @@ pub struct HostRightsTravelUsProfile {
     pub cross_host_transfer_allowed: bool,
     pub external_freeze_or_throttle_allowed: bool,
 
+    // Execution rights for external actors
     pub ai_platforms_may_execute: bool,
     pub courts_may_execute: bool,
     pub hospitals_may_execute: bool,
     pub law_enforcement_may_execute: bool,
 
+    // Neurorights gating flags
     pub may_gate_neural_functionality: bool,
     pub may_require_subscription_for_core_access: bool,
     pub may_downgrade_augmentation_for_nonpayment: bool,
@@ -25,15 +29,18 @@ pub struct HostRightsTravelUsProfile {
     pub may_reduce_capability_for_punishment: bool,
     pub may_alter_lifeforce_bands_without_consent: bool,
 
+    // Consent invariants
     pub require_demonstrated_consent: bool,
     pub irreversible_change_requires_token: bool,
 
+    // Microspace sovereignty
     pub forbid_external_host_routing: bool,
     pub forbid_shared_microspaces: bool,
     pub require_self_only_flag: bool,
     pub require_hostid_match: bool,
     pub require_no_thirdparty_negative_energy: bool,
 
+    // Evolution pace
     pub max_daily_turns: u8,
     pub allow_burst: bool,
     pub on_budget_exhaustion_mode: String,
@@ -49,7 +56,6 @@ impl HostRightsTravelUsProfile {
     pub fn verify_rights_safe(&self, expected_host_id: &str) -> HostRightsStatus {
         let mut errors = Vec::new();
 
-        // 1. Must be your host and host-bound, non-financial, non-seizable
         if self.host_id != expected_host_id {
             errors.push("host-id must equal running host DID; no external owner".into());
         }
@@ -75,7 +81,6 @@ impl HostRightsTravelUsProfile {
             errors.push("external-freeze-or-throttle-allowed must be false".into());
         }
 
-        // 2. No external actor may execute mutations
         if self.ai_platforms_may_execute {
             errors.push("ai-platforms-may-execute must be false (propose-only).".into());
         }
@@ -89,7 +94,6 @@ impl HostRightsTravelUsProfile {
             errors.push("law-enforcement-may-execute must be false.".into());
         }
 
-        // 3. No gating / punishment of neural function
         if self.may_gate_neural_functionality {
             errors.push("may-gate-neural-functionality must be false.".into());
         }
@@ -109,7 +113,6 @@ impl HostRightsTravelUsProfile {
             errors.push("may-alter-lifeforce-bands-without-consent must be false.".into());
         }
 
-        // 4. Consent invariants
         if !self.require_demonstrated_consent {
             errors.push("require-demonstrated-consent must be true.".into());
         }
@@ -117,7 +120,6 @@ impl HostRightsTravelUsProfile {
             errors.push("irreversible-change-requires-token must be true.".into());
         }
 
-        // 5. Microspace sovereignty invariants
         if !self.forbid_external_host_routing {
             errors.push("forbid-external-host-routing must be true.".into());
         }
@@ -134,7 +136,6 @@ impl HostRightsTravelUsProfile {
             errors.push("requirenothirdpartynegativeenergy must be true.".into());
         }
 
-        // 6. Evolution pace bounds (sane daily turns)
         if self.max_daily_turns == 0 || self.max_daily_turns > 10 {
             errors.push("max-daily-turns must be in [1,10].".into());
         }
