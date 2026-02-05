@@ -33,7 +33,6 @@ pub struct LifeforceBandSeries {
     pub samples: Vec<LifeforceSample>,
 }
 
-/// Inner, non-financial, per-host biophysical token state.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BioTokenState {
     pub brain:  f64,
@@ -42,6 +41,9 @@ pub struct BioTokenState {
     pub oxygen: f64,
     pub nano:   f64,
     pub smart:  f64,
+
+    pub evolve: EvolveBudget,   // EVOLVE scalar
+    pub morph:  MorphBudget,    // MORPH vector
 }
 
 // Seal core types so mutation traits cannot be implemented on foreign types.
