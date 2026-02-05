@@ -11,7 +11,6 @@ links
   link-microspace-profile personal-microspace-profile.v1
 end
 
-1. Sovereign, host-bound, non-financial
 sovereignty
   host-bound true
   defi-bridge false
@@ -22,7 +21,6 @@ sovereignty
   external-freeze-or-throttle-allowed false
 end
 
-2. Jurisdictional firewall (Maricopa County, US-wide)
 jurisdiction
   scope
     - us-az-maricopa
@@ -37,7 +35,6 @@ jurisdiction
   law-enforcement-may-execute false
 end
 
-3. Neural and evolution rights
 neurorights
   may-gate-neural-functionality false
   may-require-subscription-for-core-access false
@@ -47,7 +44,6 @@ neurorights
   may-alter-lifeforce-bands-without-consent false
 end
 
-4. Consent and irreversibility
 consent
   require-demonstrated-consent true
   require-transcripthash true
@@ -57,7 +53,6 @@ consent
   irreversible-token-scope-id host-evolution-and-neuromorph-2026-v1
 end
 
-5. Microspace sovereignty (biophysically-active)
 microspace
   forbid-external-host-routing true
   forbid-shared-microspaces true
@@ -66,7 +61,6 @@ microspace
   requirenothirdpartynegativeenergy true
 end
 
-6. Pain / fear / blood self-envelopes (self-chosen)
 envelopes
   pain
     preferred-range-0-1 0.20 0.65
@@ -84,7 +78,6 @@ envelopes
     allow-evolve-if-blood-above 0.30
 end
 
-7. Daily evolution pace (no forced regression)
 evolution-turns
   max-daily-turns 10
   min-daily-turns 0
@@ -93,7 +86,6 @@ evolution-turns
   forbid-forced-evolution-reversal true
 end
 
-8. Platform and AI-Chat behavior
 ai-chat
   platforms
     - Perplexity-GPT-5.1
