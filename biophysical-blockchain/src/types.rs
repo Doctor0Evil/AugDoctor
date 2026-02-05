@@ -63,7 +63,6 @@ pub struct HostEnvelope {
 
 impl Sealed for HostEnvelope {}
 
-/// System-only adjustment to the inner ledger (no transfer semantics).
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SystemAdjustment {
     pub deltabrain:  f64,
@@ -72,10 +71,11 @@ pub struct SystemAdjustment {
     pub deltaoxygen: f64,
     pub deltanano:   f64,
     pub deltasmart:  f64,
-    /// Eco-cost in FLOPs, nJ, etc. for accounting.
     pub ecocost:     f64,
-    /// Human-readable reason label (e.g. "quantum-learning-step").
     pub reason:      String,
+
+    pub delta_evolve: f64,        // EVOLVE consumption for this mutation
+    pub delta_morph:  MorphDelta, // MORPH category deltas
 }
 
 impl Sealed for SystemAdjustment {}
