@@ -1,0 +1,5 @@
+{
+  "max_kwh_inference": 0.12,
+  "max_atp_per_synapse": 100000,
+  "spike_density_corridor": [0.7, 1.3]
+}
