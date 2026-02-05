@@ -7,11 +7,11 @@
 //! - inner-ledger turn state (`DailyTurnState`),
 //! - ALN-hosted policy (`EvolutionTurnPolicy2026v1`),
 //! - and per-turn validation results,
-//! into a single, typed constraint surface for evolution-related mutations.
+//! into a single, typed constraint surface for evolution-related mutations.[file:39]
 //!
 //! It does not change lifeforce, eco, or consent semantics; it composes them by
 //! calling into existing guards before deciding whether an evolution turn may
-//! be consumed.[file:39][file:42]
+//! be consumed.[file:42][file:47]
 
 use std::fmt;
 
@@ -22,11 +22,7 @@ use crate::biophysical_chain::neuro_automation_pipeline::EvolutionProposal;
 use crate::organichain_consensus::EvolutionIntervalState;
 use crate::biophysical_chain::constraints::BiophysicalConstraints;
 use crate::governance::aln_loader::AlnShardLoader;
-
-// These come from your existing governance layer and ALN schema bindings.
-// The struct here matches EvolutionTurnPolicy2026v1 as used in
-// `.Organichain/NeuroPC/Evolution/evolutionturnpolicy.aln`.[file:39]
-use crate::governance::evolution_turn_policy::EvolutionTurnPolicy2026v1;
+use crate::governance::evolution_turn_policy::EvolutionTurnPolicy2026v1; // ALN binding.[file:39]
 
 /// Logical outcome of a discipline check for a specific operation.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -91,21 +87,21 @@ pub trait ProgrammaticDiscipline {
     /// returning a structured decision.
     fn evaluate(
         &self,
-        ctx: &DisciplineContext,
+        ctx: &mut DisciplineContext<'_>,
     ) -> DisciplineDecision;
 }
 
-/// Minimal context needed for evolution-turn discipline decisions.
+/// Minimal context needed for discipline decisions on evolution turns.
 ///
-/// This intentionally mirrors the evolution-related fields already present
-/// in your per-turn validation context, but is kept narrow so it can be
-/// re-used outside the per-turn matrix if needed.[file:39]
-#[derive(Clone, Debug)]
+/// This mirrors the evolution-related fields already present in your
+/// per-turn validation context, but is kept narrow so it can be re-used
+/// outside the full validator matrix if needed.[file:39]
+#[derive(Debug)]
 pub struct DisciplineContext<'a> {
     /// Current evolution proposal being considered (if any).
     pub proposal: Option<&'a EvolutionProposal>,
 
-    /// Per-host daily turn state (inner-ledger).
+    /// Per-host daily turn state (inner-ledger, mutable).
     pub daily_turn_state: &'a mut DailyTurnState,
 
     /// Evolution interval state from OrganichainConsensus, if available.
@@ -120,10 +116,9 @@ pub struct DisciplineContext<'a> {
 
 /// Concrete discipline: daily evolution-turn envelope.
 ///
-/// This type binds a host-local `DailyTurnState` with the host-authored ALN
-/// policy `EvolutionTurnPolicy2026v1` and an inner-ledger hard ceiling on
-/// turns per day. It is pure stateful logic; storage and persistence of
-/// `DailyTurnState` remain in the inner-ledger.[file:42]
+/// This binds host-local `DailyTurnState` with the host-authored ALN
+/// policy `EvolutionTurnPolicy2026v1` and an inner-ledger hard ceiling
+/// on turns per day.[file:42]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EvolutionTurnDiscipline {
     /// Policy as authored by the host in `evolutionturnpolicy.aln`.
@@ -140,25 +135,23 @@ impl EvolutionTurnDiscipline {
         host_id: S,
         compiled_max_daily_turns: u8,
     ) -> Result<Self, String> {
-        let policy: EvolutionTurnPolicy2026v1 = loader
+        let mut policy: EvolutionTurnPolicy2026v1 = loader
             .load_for_host("EvolutionTurnPolicy2026v1", host_id.as_ref())
             .map_err(|e| format!("failed to load EvolutionTurnPolicy2026v1: {e}"))?;
 
-        let max_turns = policy.maxturnsperday.min(compiled_max_daily_turns as u32) as u8;
+        let max_turns = policy
+            .maxturnsperday
+            .min(compiled_max_daily_turns as u32) as u8;
+
+        policy.maxturnsperday = max_turns as u32;
 
         Ok(Self {
-            policy: EvolutionTurnPolicy2026v1 {
-                maxturnsperday: max_turns as u32,
-                ..policy
-            },
+            policy,
             compiled_max_daily_turns,
         })
     }
 
-    /// Check aggregate conditions before consuming a turn.
-    ///
-    /// This is intentionally conservative: any violation results in `Deny`
-    /// or `LogOnly` (if interval state says "no more turns today").[file:39][file:42]
+    /// Internal evaluation logic, separated to keep the trait impl simple.
     fn evaluate_internal(
         &self,
         ctx: &mut DisciplineContext<'_>,
@@ -188,16 +181,16 @@ impl EvolutionTurnDiscipline {
         let policy_max = self.policy.maxturnsperday as u8;
         let ceiling = policy_max.min(self.compiled_max_daily_turns);
 
-        // DailyTurnState handles date rollover internally; if it refuses,
+        // DailyTurnState handles date rollover and quota; if it refuses,
         // the turn limit is reached for today.[file:42]
         let can_consume = ctx.daily_turn_state.can_consume_turn(ceiling);
         if !can_consume {
             return DisciplineDecision::deny("daily evolution-turn limit reached");
         }
 
-        // 4. Optional: reflect pain/blood/fear envelopes as soft guardrails,
-        // but do not override existing BiophysicalConstraints; they are checked
-        // elsewhere in DefaultProposalValidator and Organichain consensus.[file:39]
+        // 4. Optional: reflect pain/blood/fear envelopes as guardrails,
+        // but do not override existing BiophysicalConstraints; those
+        // are enforced in the core validator pipeline.[file:39][file:42]
         if let Some(constraints) = ctx.constraints {
             if !constraints.within_daily_evolution_envelopes(&self.policy) {
                 return DisciplineDecision::deny(
@@ -221,27 +214,8 @@ impl ProgrammaticDiscipline for EvolutionTurnDiscipline {
 
     fn evaluate(
         &self,
-        ctx: &DisciplineContext,
+        ctx: &mut DisciplineContext<'_>,
     ) -> DisciplineDecision {
-        // We need a mutable view of DailyTurnState to attempt consumption.
-        // Callers should construct `DisciplineContext` with a &mut state.
-        // Here we transmute the lifetime only within this scope; the outer
-        // API remains safe because `DisciplineContext` is user-constructed.
-        let mut_ctx = unsafe {
-            // SAFETY: caller guarantees exclusive &mut DailyTurnState when
-            // building the DisciplineContext for evaluate(). No aliasing is
-            // introduced by this cast at the boundary of this method.
-            let ptr = ctx.daily_turn_state as *const DailyTurnState as *mut DailyTurnState;
-            let mut_ref: &mut DailyTurnState = &mut *ptr;
-            DisciplineContext {
-                proposal: ctx.proposal,
-                daily_turn_state: mut_ref,
-                interval_state: ctx.interval_state,
-                constraints: ctx.constraints,
-                host_id: ctx.host_id,
-            }
-        };
-
-        self.evaluate_internal(&mut_ctx)
+        self.evaluate_internal(ctx)
     }
 }
