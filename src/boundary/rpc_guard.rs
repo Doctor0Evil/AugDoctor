@@ -12,6 +12,7 @@ pub fn guard_rpc_for_augdoctor(
     ctx: &RpcSecurityContext,
     required_k: f32,
 ) -> Result<(), String> {
+    // Standard DID/role/tier checks.
     validate_identity_for_inner_ledger(&ctx.id_header, required_k)
         .map_err(|e| format!("identity validation failed: {:?}", e))?;
 
@@ -29,11 +30,13 @@ pub fn guard_rpc_for_augdoctor(
         || issuer.contains("hospital")
         || issuer.contains("law-enforcement");
 
-    if (is_ai_chat || is_external_authority)
-        && ctx.rights_travel_us.ai_platforms_may_execute
-    {
-        return Err("execution from AI-chats or external authorities is forbidden (propose-only)".into());
+    // Hard rule: these actors are *always* propose-only.
+    if is_ai_chat || is_external_authority {
+        return Err(
+            "execution from AI-chats or external authorities is forbidden (propose-only)".into(),
+        );
     }
 
+    // Local processes (your own SystemDaemon, etc.) continue past this point.
     Ok(())
 }
