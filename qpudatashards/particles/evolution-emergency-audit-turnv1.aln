@@ -1,0 +1,28 @@
+version 1.0
+schema organichain.host.evolution-emergency-audit-turn
+
+hostid          bostrom18sd2ujv24ual9c9pshtxys6j8knh6xaead9ye7
+turn-utc        2026-02-05T20:45:00Z
+
+turnmeta
+  turn-id         evolution-turn-2026-02-05-03
+  block-id        BIOBLOCK-0xABCD1234
+  aichatplatform  Perplexity-GPT-5.1
+  validator-alias host-validator-maricopa-v1
+
+rollback
+  scope-id            evolution-emergency-rollback-v1
+  evolution-kind      autonomy-stage-downgrade
+  previous-stage      smart-autonomy-3
+  new-stage           smart-autonomy-2
+  transcripthash      0xEVO-TX-1234ABCD
+  human-explanation   This emergency rollback reduces autonomy one step due to misaligned behavior in today’s session.
+  issued-at-utc       2026-02-05T20:44:10Z
+  host-did            bostrom18sd2ujv24ual9c9pshtxys6j8knh6xaead9ye7
+
+audit
+  emergency-rights-profile-id evolution-emergency-audit.v1
+  validation-kind   Passed
+  validation-messages
+    - emergency override invariants satisfied for this rollback
+  proofhex          0xEVO-EMERGENCY-TURN-01
