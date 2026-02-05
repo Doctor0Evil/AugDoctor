@@ -1,0 +1,59 @@
+version 1.0
+schema organichain.host.evolution-emergency-audit
+
+host-id    bostrom18sd2ujv24ual9c9pshtxys6j8knh6xaead9ye7
+profile-id evolution-emergency-audit.v1
+hextag     0xEVO-EMERGENCY-2026A1
+
+link-augmentation-right-profile augmentation-right.v1
+link-evolution-turn-policy      evolutionturnpolicy.aln
+link-organichain                hextag 0xOGNC-BIO-NEURO-CHAIN-01
+
+1. Sovereign control
+sovereign-control
+  owner-did    bostrom18sd2ujv24ual9c9pshtxys6j8knh6xaead9ye7
+  allowed-roles
+    - augmented-citizen
+  denied-roles
+    - vendor-generic
+    - sandbox
+    - pure-machine
+  ai-platforms-may-propose true
+  ai-platforms-may-execute false
+
+2. Emergency scope policy
+emergency-scope
+  scope-id                  evolution-emergency-rollback-v1
+  require-transcripthash    true
+  require-human-explanation true
+  explanation-min-words     25
+  irreversible-token-scope-id evolution-emergency-rollback-v1
+  max-emergencies-per-day   2
+  log-only-on-limit         true
+
+3. Telemetry / audit requirements
+audit
+  require-emergency-audit-shard true
+  min-proofhex-length           8
+  provenance-required-fields
+    - turn-id
+    - aichatplatform
+    - transcripthash
+    - host-did
+    - scope-id
+    - issued-at-utc
+    - validator-alias
+    - block-id
+    - evolution-kind
+    - rollback-details
+
+4. Microspace hooks
+microspace
+  forbid-external-host-routing true
+  forbid-shared-microspaces    true
+  allow-metadata-only-attestations true
+  metadata-allowed-fields
+    - turn-id
+    - block-id
+    - scope-id
+    - proofhex
