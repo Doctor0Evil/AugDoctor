@@ -1,0 +1,17 @@
+version 1.0
+schema organic.cpu.host-budget
+hostid bostrom18sd2ujv24ual9c9pshtxys6j8knh6xaead9ye7
+
+organic-cpu-budget
+  # Energy per evolution window in Joules
+  max-energy-joules      9000.0
+  # Max neuromorph duty fraction 0..1
+  max-neuromorph-duty    0.40
+  # Max chat duty fraction 0..1
+  max-chat-duty          0.50
+  # Thermal ceilings
+  max-core-temp-c        37.8
+  max-delta-core-c        0.3
+  # Inflammation envelope 0..1
+  max-inflammation-index 0.40
+end
