@@ -1,0 +1,13 @@
+[package]
+name = "biophysical-corridor-mutation"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+biophysical-blockchain = { path = "../biophysical-blockchain" }
+aln-did-access        = { path = "../aln-did-access" }
+consent-governance    = { path = "../consent-governance" }
+serde                 = { version = "1.0", features = ["derive"] }
+
+[features]
+default = []
