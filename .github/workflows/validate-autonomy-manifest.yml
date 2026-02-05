@@ -1,0 +1,45 @@
+name: Validate Autonomy Manifest
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build CI tools
+        run: |
+          cargo build --release --bin cyberswarm-neuromorph-ci
+          cargo build --release --bin organic-cpu-scheduler
+          cargo build --release --bin autonomy-graph-github
+
+      - name: Run cyberswarm-neuromorph-ci (MORPH <= EVOLVE)
+        run: |
+          ./target/release/cyberswarm-neuromorph-ci \
+            --manifest manifests/research-2026-02-05-autonomy-manifest.json \
+            --morph-token policies/morph_token.example.json \
+            --evolve-bounds policies/evolve_bounds.host-local.json \
+            --check-morph-evolve \
+            --check-corridors
+
+      - name: Verify ALN Shards
+        run: |
+          ./target/release/autonomy-graph-github \
+            --shards-dir shards \
+            --pubkey .ci/aln-pubkey.ed25519 \
+            --verify-signatures
+
+      - name: Eco-Impact Eligibility Check
+        run: |
+          ./target/release/organic-cpu-scheduler \
+            --profile profiles/per-turn-validation.profile.json \
+            --eco-gate
