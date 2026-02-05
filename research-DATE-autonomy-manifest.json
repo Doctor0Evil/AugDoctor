@@ -1,0 +1,22 @@
+{
+  "hostdid": "bostrom18sd2ujv24ual9c9pshtxys6j8knh6xaead9ye7",
+  "organic_cpu_profile": {
+    "snapshot_ranges": {
+      "hrv_ms": { "min": 20.0, "max": 200.0 },
+      "core_temp_c": { "min": 36.0, "max": 37.8 },
+      "skin_temp_c": { "min": 28.0, "max": 36.0 },
+      "inflammation_index": { "min": 0.0, "max": 0.4 },
+      "protein_availability_index": { "min": 0.3, "max": 1.0 }
+    },
+    "budget": {
+      "max_energy_joules": 9000.0,
+      "max_neuromorph_duty": 0.40,
+      "max_chat_duty": 0.50
+    },
+    "governance_shards": [
+      "organic-cpu-host-budget.aln",
+      "biospectre.neuromorph.evolution-budget",
+      "augdoctor.assistant.autonomy.profile"
+    ]
+  }
+}
