@@ -1,0 +1,61 @@
+name: neuromorph-autonomy-ci
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  neuromorph_autonomy_ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: ALN spec check
+        run: |
+          aln-spec-check aln/*.aln
+
+      - name: Cargo format and lint
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Cargo tests (including neuromorph property tests)
+        run: |
+          cargo test --all --features "neuromorph-ci"
+
+      - name: Kani model checking – neuromorph state machines
+        run: |
+          kani --workspace --enable-unstable
+
+      - name: Metrics contract check
+        run: |
+          ./target/debug/metrics-contract-check
+
+      - name: Generate neuromorph manifests
+        run: |
+          cargo test -p cyberswarm-neuromorph-ci -- --nocapture
+
+      - name: Build autonomy graph and enforce invariants
+        run: |
+          cargo run -p autonomy-graph-github --release
+
+      - name: Emit research manifests
+        run: |
+          bioscale-evolution-cli \
+            --emit-upgrades research-$(date +%F)-manifest.json \
+            --emit-chat research-$(date +%F)-chat-manifest.json \
+            --emit-neuromorph research-$(date +%F)-neuromorph-manifest.json \
+            --emit-autonomy research-$(date +%F)-autonomy-manifest.json
+
+      - name: Upload research manifests
+        uses: actions/upload-artifact@v4
+        with:
+          name: research-manifests
+          path: research-manifests/
