@@ -1,25 +1,69 @@
-use crate::types::{BioTokenState, HostEnvelope, SystemAdjustment};
+use crate::types::{
+    BioTokenState,
+    EcoBandProfile,
+    HostEnvelope,
+    LifeforceBand,
+    LifeforceBandSeries,
+    SafetyCurveWave,
+    SystemAdjustment,
+    SystemDomain,
+};
 use crate::morph::{EvolveBudget, MorphBudget, MorphDelta, MorphRiskBands};
+
+use neural_roping::pain_corridor::PainCorridorSignal;
+
 use thiserror::Error;
 
+/// Errors raised by lifeforce, eco, WAVE, PainCorridor, and EVOLVE/MORPH guards.
 #[derive(Debug, Error)]
 pub enum LifeforceError {
-    #[error("forbidden: BRAIN would go below brain_min (death condition)")]
+    #[error("BRAIN would go below host minimum (death condition)")]
     BrainNegative,
-    #[error("forbidden: BLOOD would reach or cross blood_min (unsafe depletion)")]
+    #[error("BLOOD would reach or cross zero (unsafe depletion)")]
     BloodDepletion,
-    #[error("forbidden: OXYGEN would reach or cross oxygen_min (unsafe depletion)")]
+    #[error("OXYGEN would reach or cross zero (unsafe depletion)")]
     OxygenDepletion,
-    #[error("forbidden: NANO exceeds host nano_max_fraction envelope")]
-    NanoOverEnvelope,
-    #[error("forbidden: SMART autonomy would exceed smart_max or BRAIN")]
+    #[error("SMART autonomy would exceed host smart_max or BRAIN")]
     SmartOverMax,
+    #[error("NANO exceeds host nano_max_fraction envelope")]
+    NanoOverEnvelope,
     #[error("eco-cost {0} exceeds host eco_flops_limit")]
     EcoOverLimit(f64),
-    #[error("MORPH L1 norm would exceed EVOLVE corridor")]
+    #[error("lifeforce band is in HardStop")]
+    LifeforceHardStop,
+    #[error("WAVE would exceed safe ceiling under current fatigue")]
+    WaveOverSafeCeiling,
+    #[error("BRAIN below eco-neutral reserve for current eco band")]
+    BrainBelowEcoNeutral,
+    #[error("SystemAdjustment vetoed by sustained PainCorridor in relevant domain/region")]
+    PainCorridorVeto,
+    #[error("MORPH/EVOLVE corridor exceeded")]
     MorphExceedsEvolve,
     #[error("MORPH risk band violation without new evidence")]
     MorphRiskBandViolation,
+}
+
+// --- helpers ---------------------------------------------------------------
+
+fn compute_fatigue_from_lifeforce(
+    series: &LifeforceBandSeries,
+) -> (f64, LifeforceBand) {
+    series.compute_fatigue_and_band()
+}
+
+fn eco_neutral_brain_required(profile: &EcoBandProfile, state_brain: f64) -> f64 {
+    profile.econeutral_brain_required(state_brain)
+}
+
+/// Determine if this adjustment touches a pain‑relevant somatic domain.
+fn is_pain_relevant_domain(domain: &SystemDomain) -> bool {
+    matches!(
+        domain,
+        SystemDomain::DetoxMicro
+            | SystemDomain::Radiology
+            | SystemDomain::NanoRepairMicro
+            | SystemDomain::TeethClawMicro
+    )
 }
 
 /// Internal: enforce ‖M‖₁ ≤ E_evolve.
@@ -57,16 +101,38 @@ fn check_morph_risk_monotone(
     Ok(())
 }
 
-/// Apply a system adjustment under biophysical + EVOLVE/MORPH constraints.
-/// This is the only place token-like balances are changed.[file:42][file:47]
+// --- canonical guarded mutation gate --------------------------------------
+
+/// Canonical mutation gate: lifeforce + eco + WAVE + PainCorridor + EVOLVE/MORPH.
+///
+/// This is the **only** place BioTokenState balances change.
+#[allow(clippy::too_many_arguments)]
 pub fn apply_lifeforce_guarded_adjustment(
     state: &mut BioTokenState,
     env: &HostEnvelope,
     adj: &SystemAdjustment,
+    lifeforce_series: &LifeforceBandSeries,
+    eco_profile: &EcoBandProfile,
+    wave_curve: &SafetyCurveWave,
+    pain_signal: Option<&PainCorridorSignal>,
     morph_risk: &MorphRiskBands,
     has_new_evidence: bool,
 ) -> Result<(), LifeforceError> {
-    // Projected biophysical tokens.
+    // 1. Lifeforce band + fatigue.
+    let (fatigue, band) = compute_fatigue_from_lifeforce(lifeforce_series);
+
+    if matches!(band, LifeforceBand::HardStop) {
+        return Err(LifeforceError::LifeforceHardStop);
+    }
+
+    // 2. Subjective veto: sustained PainCorridor blocks somatic domains.
+    if let Some(pain) = pain_signal {
+        if pain.is_sustained_hardstop() && is_pain_relevant_domain(&adj.domain) {
+            return Err(LifeforceError::PainCorridorVeto);
+        }
+    }
+
+    // 3. Projected biophysical tokens.
     let new_brain  = state.brain  + adj.delta_brain;
     let new_wave   = state.wave   + adj.delta_wave;
     let new_blood  = state.blood  + adj.delta_blood;
@@ -84,22 +150,34 @@ pub fn apply_lifeforce_guarded_adjustment(
         return Err(LifeforceError::OxygenDepletion);
     }
 
-    // BRAIN still governs safe ranges for SMART implicitly via envelope.
+    // 4. Eco‑neutral BRAIN reserve.
+    let eco_required = eco_neutral_brain_required(eco_profile, new_brain);
+    if new_brain < eco_required {
+        return Err(LifeforceError::BrainBelowEcoNeutral);
+    }
+
+    // 5. WAVE ceiling from BRAIN + fatigue.
+    let safe_wave_ceiling = wave_curve.safe_wave_ceiling(new_brain, fatigue);
+    if new_wave > safe_wave_ceiling {
+        return Err(LifeforceError::WaveOverSafeCeiling);
+    }
+
+    // 6. SMART bounds.
     if new_smart > env.smart_max || new_smart > new_brain {
         return Err(LifeforceError::SmartOverMax);
     }
 
-    // NANO compliance envelope: fraction of eco_flops_limit encoded as state.nano.
+    // 7. NANO envelope (fraction).
     if new_nano > env.nano_max_fraction {
         return Err(LifeforceError::NanoOverEnvelope);
     }
 
-    // Eco envelope: forbid operations that exceed eco budget.
+    // 8. Eco envelope.
     if adj.eco_cost > env.eco_flops_limit {
         return Err(LifeforceError::EcoOverLimit(adj.eco_cost));
     }
 
-    // EVOLVE / MORPH invariants.
+    // 9. EVOLVE / MORPH invariants.
     let evolve_after = EvolveBudget {
         evolve_total: state.evolve.evolve_total,
         evolve_used:  (state.evolve.evolve_used + adj.delta_evolve).max(0.0),
@@ -111,7 +189,7 @@ pub fn apply_lifeforce_guarded_adjustment(
     let morph_after = check_morph_vs_evolve(&evolve_after, &state.morph, &adj.delta_morph)?;
     check_morph_risk_monotone(&state.morph, &morph_after, morph_risk, has_new_evidence)?;
 
-    // If all checks pass, commit.
+    // 10. All checks passed: commit.
     state.brain  = new_brain;
     state.wave   = new_wave;
     state.blood  = new_blood;
