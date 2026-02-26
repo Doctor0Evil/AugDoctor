@@ -1,0 +1,9 @@
+[package]
+name = "biophysical-engine"
+version = "0.1.0"
+edition = "2021"
+authors = ["AugDoctor"]
+description = "Quantum-learning biospatial cybernano kernel for ALN/Eibon/DID"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
