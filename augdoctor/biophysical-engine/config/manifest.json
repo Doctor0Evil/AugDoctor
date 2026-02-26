@@ -1,0 +1,24 @@
+{
+  "version": "1.0.0",
+  "timestamp": "2026-02-25T19:58:00-07:00",
+  "citizen_did": "did:citizen:phx_santan_001",
+  "bostrom_anchor": "BOS_0xA1B2C3D4E5F67890",
+  "evm_anchor": "0x519f...2802D",
+  "brain_tokens_circulating": 125000000,
+  "x7_state": [0.9876, 42.0, 1.23, 0.876543, 33.170277],
+  "q_region_index": 42,
+  "k_env_global": {"thermal_min": 36.5, "thermal_max": 38.5, "coherence": 0.9998},
+  "k_mode_kernel": {"mode": "quantum_learn", "safety": 1.0},
+  "geofences": {
+    "home_phoenix_santan": [[33.170277, -111.572220], [33.4484, -112.0740], [33.3062, -111.8413], [33.0, -111.8], [33.170277, -111.572220]],
+    "detox_safezone": [[33.15, -111.55], [33.2, -111.6]],
+    "hospital_er": [[33.45, -112.05]]
+  },
+  "detox_policies": ["medical_hold_allowed", "negative_energy_route_to_hostlog"],
+  "rights_kernel": {"compliance_field": "immutable_soul_policy"},
+  "endpoints": {"capacity": 100.0, "thermal_bounds": [36.5, 38.5], "qp_clip": true},
+  "nano_memory": {"local_state": [0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x23, 0x45, 0x67], "safe_nvm_size": 4096},
+  "consciousness_guard": {"immutable": true, "no_clone": true, "sticky": false},
+  "evolution_points": 12,
+  "kml_export": "ready"
+}
