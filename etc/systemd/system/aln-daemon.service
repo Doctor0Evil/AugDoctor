@@ -1,0 +1,12 @@
+[Unit]
+Description=ALN Autonomous Sovereign Daemon
+After=network.target
+
+[Service]
+ExecStart=/usr/local/bin/aln_autonomous_daemon
+Restart=always
+User=root
+Environment=ALN_FIXED_PATH=/var/lib/aln/manifests/
+
+[Install]
+WantedBy=multi-user.target
